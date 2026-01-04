@@ -1,273 +1,203 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
-import { 
-  ShieldAlert, Map as MapIcon, TrendingUp, Navigation, 
-  ListFilter, MessageCircle, Phone, Heart, Crosshair, BookOpen, Sun, 
-  Lightbulb, Award, Info, CloudRain, Camera, ChevronRight, Compass, AlertTriangle
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { Map as MapIcon, BookOpen, Stamp, Info, ChevronRight, Navigation } from 'lucide-react';
 
-// --- FIX DE ICONOS PARA VERCEL ---
+// --- CONFIGURACIÓN DE ICONOS ---
 const createCustomIcon = (color) => new L.DivIcon({
-  html: `<div style="background: ${color}; width: 16px; height: 16px; border: 3px solid white; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.2);"></div>`,
-  className: '',
-  iconSize: [16, 16],
-  iconAnchor: [8, 8]
+  html: `<div style="background-color: ${color}; width: 12px; height: 12px; border: 2px solid white; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
+  className: 'custom-marker-icon',
+  iconSize: [12, 12],
+  iconAnchor: [6, 6]
 });
 
-// --- ESTILOS GLOBALES INYECTADOS ---
-const GlobalStyles = () => (
-  <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-    :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
-    body, html, #root { 
-      margin: 0; padding: 0; width: 100%; height: 100%; 
-      overflow: hidden; position: fixed; font-family: 'Inter', sans-serif;
-      background-color: #f8fafc;
-    }
-    .leaflet-container { width: 100% !important; height: 100% !important; background: #e5e7eb !important; }
-    .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
-    .hide-scrollbar::-webkit-scrollbar { display: none; }
-    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    @keyframes pulse-red { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { transform: scale(1.05); box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); } 100% { transform: scale(1); } }
-    .animate-sos { animation: pulse-red 2s infinite; }
-    .pulse-user { width: 22px; height: 22px; background: #3b82f6; border: 4px solid white; border-radius: 50%; box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
-  `}</style>
-);
+// --- DATOS DE LAS 34 ETAPAS (CAMINO FRANCÉS) ---
+const stages = [
+  { id: 1, name: "Saint-Jean-Pied-de-Port - Roncesvalles", coords: [43.1635, -1.2348], dist: "24.2 km" },
+  { id: 2, name: "Roncesvalles - Zubiri", coords: [42.9886, -1.3201], dist: "21.4 km" },
+  { id: 3, name: "Zubiri - Pamplona", coords: [42.8125, -1.6458], dist: "20.4 km" },
+  { id: 4, name: "Pamplona - Puente la Reina", coords: [42.6719, -1.8136], dist: "23.9 km" },
+  { id: 5, name: "Puente la Reina - Estella", coords: [42.6711, -2.0311], dist: "21.6 km" },
+  { id: 6, name: "Estella - Los Arcos", coords: [42.5667, -2.1917], dist: "21.3 km" },
+  { id: 7, name: "Los Arcos - Logroño", coords: [42.4667, -2.4500], dist: "27.6 km" },
+  { id: 8, name: "Logroño - Nájera", coords: [42.4167, -2.7333], dist: "29.0 km" },
+  { id: 9, name: "Nájera - Santo Domingo de la Calzada", coords: [42.4414, -2.9531], dist: "21.0 km" },
+  { id: 10, name: "Sto. Domingo - Belorado", coords: [42.4201, -3.1903], dist: "22.0 km" },
+  { id: 11, name: "Belorado - Agés", coords: [42.3744, -3.4511], dist: "27.4 km" },
+  { id: 12, name: "Agés - Burgos", coords: [42.3439, -3.6969], dist: "23.0 km" },
+  { id: 13, name: "Burgos - Hontanas", coords: [42.3122, -3.9458], dist: "31.1 km" },
+  { id: 14, name: "Hontanas - Frómista", coords: [42.2667, -4.4061], dist: "34.5 km" },
+  { id: 15, name: "Frómista - Carrión de los Condes", coords: [42.3389, -4.6031], dist: "18.8 km" },
+  { id: 16, name: "Carrión de los Condes - Terradillos", coords: [42.3644, -4.9211], dist: "26.3 km" },
+  { id: 17, name: "Terradillos - Sahagún", coords: [42.3714, -5.0311], dist: "13.9 km" },
+  { id: 18, name: "Sahagún - El Burgo Ranero", coords: [42.4222, -5.2211], dist: "17.6 km" },
+  { id: 19, name: "El Burgo Ranero - Mansilla de las Mulas", coords: [42.5000, -5.4167], dist: "18.8 km" },
+  { id: 20, name: "Mansilla - León", coords: [42.5989, -5.5669], dist: "18.5 km" },
+  { id: 21, name: "León - San Martín del Camino", coords: [42.5611, -5.8111], dist: "24.6 km" },
+  { id: 22, name: "San Martín - Astorga", coords: [42.4589, -6.0561], dist: "23.7 km" },
+  { id: 23, name: "Astorga - Foncebadón", coords: [42.4439, -6.3411], dist: "25.8 km" },
+  { id: 24, name: "Foncebadón - Ponferrada", coords: [42.5467, -6.5961], dist: "26.8 km" },
+  { id: 25, name: "Ponferrada - Villafranca del Bierzo", coords: [42.6072, -6.8111], dist: "24.2 km" },
+  { id: 26, name: "Villafranca - O Cebreiro", coords: [42.7011, -7.0411], dist: "27.8 km" },
+  { id: 27, name: "O Cebreiro - Triacastela", coords: [42.7567, -7.2411], dist: "20.8 km" },
+  { id: 28, name: "Triacastela - Sarria", coords: [42.7769, -7.4167], dist: "18.4 km" },
+  { id: 29, name: "Sarria - Portomarín", coords: [42.8075, -7.6161], dist: "22.2 km" },
+  { id: 30, name: "Portomarín - Palas de Rei", coords: [42.8733, -7.8686], dist: "24.8 km" },
+  { id: 31, name: "Palas de Rei - Arzúa", coords: [42.9269, -8.1639], dist: "28.5 km" },
+  { id: 32, name: "Arzúa - O Pedrouzo", coords: [42.9111, -8.3611], dist: "19.3 km" },
+  { id: 33, name: "O Pedrouzo - Santiago de Compostela", coords: [42.8806, -8.5444], dist: "19.4 km" },
+  { id: 34, name: "Santiago de Compostela (Catedral)", coords: [42.8806, -8.5464], dist: "Meta" }
+];
 
-const MapController = ({ userPos, isTracking, center }) => {
+const polylineRoute = stages.map(s => s.coords);
+
+function ChangeView({ center }) {
   const map = useMap();
   useEffect(() => {
-    if (userPos && isTracking) {
-      map.flyTo(userPos, map.getZoom(), { animate: true });
-    } else if (center && !isTracking) {
-      map.setView(center, map.getZoom());
-    }
-  }, [userPos, isTracking, center, map]);
+    if (center) map.setView(center, 13);
+  }, [center, map]);
   return null;
-};
+}
 
-const App = () => {
-  const [view, setView] = useState('map');
-  const [selectedEtapa, setSelectedEtapa] = useState(1);
-  const [userPos, setUserPos] = useState(null);
-  const [isTracking, setIsTracking] = useState(false);
-  const [showSelector, setShowSelector] = useState(false);
-  
-  const [stamps, setStamps] = useState(() => JSON.parse(localStorage.getItem('camino_stamps_v3') || '[]'));
-  const [notes, setNotes] = useState(() => JSON.parse(localStorage.getItem('camino_notes_v3') || '{}'));
-
-  const etapas = useMemo(() => [
-    { id: 1, n: "SJ Pied de Port - Roncesvalles", dist: "24.2 km", coords: [43.1635, -1.2358], c: "Cruce de Pirineos." },
-    { id: 2, n: "Roncesvalles - Zubiri", dist: "21.4 km", coords: [43.0092, -1.3194], c: "Bajada técnica de Erro." },
-    { id: 3, n: "Zubiri - Pamplona", dist: "20.4 km", coords: [42.9311, -1.5052], c: "Entrada por el puente Magdalena." },
-    { id: 4, n: "Pamplona - Puente la Reina", dist: "23.9 km", coords: [42.8169, -1.6432], c: "Vistas del Alto del Perdón." },
-    { id: 5, n: "Puente la Reina - Estella", dist: "21.6 km", coords: [42.6742, -1.7745], c: "Puente románico famoso." },
-    { id: 6, n: "Estella - Los Arcos", dist: "21.3 km", coords: [42.6711, -2.0303], c: "Fuente del vino en Irache." },
-    { id: 7, n: "Los Arcos - Logroño", dist: "27.6 km", coords: [42.5684, -2.1895], c: "Entrada a La Rioja." },
-    { id: 8, n: "Logroño - Nájera", dist: "29.0 km", coords: [42.4650, -2.4450], c: "Panteón Real de Nájera." },
-    { id: 9, n: "Nájera - Sto. Domingo", dist: "20.7 km", coords: [42.4164, -2.7330], c: "El milagro del gallo." },
-    { id: 10, n: "Sto. Domingo - Belorado", dist: "22.0 km", coords: [42.4406, -2.9531], c: "Caminos de Castilla." },
-    { id: 11, n: "Belorado - Agés", dist: "27.2 km", coords: [42.4194, -3.1906], c: "Montes de Oca." },
-    { id: 12, n: "Agés - Burgos", dist: "22.5 km", coords: [42.3739, -3.5042], c: "Llegada a la Catedral." },
-    { id: 13, n: "Burgos - Hornillos", dist: "21.4 km", coords: [42.3439, -3.6969], c: "Inmensidad de la Meseta." },
-    { id: 14, n: "Hornillos - Castrojeriz", dist: "20.1 km", coords: [42.3667, -3.9281], c: "Ruinas de San Antón." },
-    { id: 15, n: "Castrojeriz - Frómista", dist: "25.2 km", coords: [42.2892, -4.1389], c: "Subida a Mostelares." },
-    { id: 16, n: "Frómista - Carrión", dist: "19.3 km", coords: [42.3386, -4.6042], c: "Canal de Castilla." },
-    { id: 17, n: "Carrión - Terradillos", dist: "26.6 km", coords: [42.3553, -4.9228], c: "Etapa de introspección." },
-    { id: 18, n: "Terradillos - Sahagún", dist: "13.9 km", coords: [42.3719, -5.0311], c: "Centro geográfico." },
-    { id: 19, n: "Sahagún - El Burgo Ranero", dist: "17.6 km", coords: [42.4239, -5.2217], c: "Caminos de chopos." },
-    { id: 20, n: "El Burgo Ranero - Mansilla", dist: "18.8 km", coords: [42.4983, -5.4150], c: "Vía Trajana." },
-    { id: 21, n: "Mansilla - León", dist: "18.1 km", coords: [42.5989, -5.5669], c: "Vidrieras de la Catedral." },
-    { id: 22, n: "León - San Martín del C.", dist: "24.6 km", coords: [42.4936, -5.8058], c: "Hospital de Órbigo." },
-    { id: 23, n: "San Martín - Astorga", dist: "23.7 km", coords: [42.4589, -6.0561], c: "Murallas y chocolate." },
-    { id: 24, n: "Astorga - Foncebadón", dist: "25.8 km", coords: [42.4914, -6.3442], c: "Cruz de Hierro." },
-    { id: 25, n: "Foncebadón - Ponferrada", dist: "26.8 km", coords: [42.5461, -6.5911], c: "Bajada de El Acebo." },
-    { id: 26, n: "Ponferrada - Villafranca", dist: "24.1 km", coords: [42.6067, -6.8111], c: "Corazón del Bierzo." },
-    { id: 27, n: "Villafranca - O Cebreiro", dist: "27.8 km", coords: [42.7078, -7.0422], c: "Entrada a Galicia." },
-    { id: 28, n: "O Cebreiro - Triacastela", dist: "20.8 km", coords: [42.7556, -7.2411], c: "Vistas espectaculares." },
-    { id: 29, n: "Triacastela - Sarria", dist: "18.4 km", coords: [42.7761, -7.4111], c: "Monasterio de Samos opcional." },
-    { id: 30, n: "Sarria - Portomarín", dist: "22.2 km", coords: [42.8075, -7.6167], c: "Hito de los 100 km." },
-    { id: 31, n: "Portomarín - Palas de Rei", dist: "24.8 km", coords: [42.8733, -7.8681], c: "Interior de Lugo." },
-    { id: 32, n: "Palas de Rei - Arzúa", dist: "28.5 km", coords: [42.9272, -8.1633], c: "Etapa de los quesos." },
-    { id: 33, n: "Arzúa - O Pedrouzo", dist: "19.3 km", coords: [42.9125, -8.3614], c: "Cerca de la meta." },
-    { id: 34, n: "O Pedrouzo - Santiago", dist: "20.0 km", coords: [42.8806, -8.5444], c: "¡LLEGADA A LA CATEDRAL!" }
-  ], []);
-
-  const etapaActual = useMemo(() => etapas.find(e => e.id === selectedEtapa) || etapas[0], [selectedEtapa, etapas]);
-
-  useEffect(() => {
-    const watchId = navigator.geolocation.watchPosition(
-      (p) => setUserPos([p.coords.latitude, p.coords.longitude]),
-      (e) => console.error(e),
-      { enableHighAccuracy: true }
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
-
-  const addStamp = (id) => {
-    if (!stamps.includes(id)) {
-      const newS = [...stamps, id];
-      setStamps(newS);
-      localStorage.setItem('camino_stamps_v3', JSON.stringify(newS));
-    }
-  };
+export default function App() {
+  const [activeTab, setActiveTab] = useState('mapa');
+  const [currentStage, setCurrentStage] = useState(stages[0]);
 
   return (
-    <div id="root">
-      <GlobalStyles />
+    <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
       
-      {/* HEADER DINÁMICO */}
-      <div className="absolute top-0 left-0 right-0 z-[5000] p-4 pt-[calc(1rem+var(--sat))] pointer-events-none flex justify-between items-start">
-        <div className="glass p-3 rounded-2xl pointer-events-auto flex items-center gap-3 shadow-lg">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white">
-            <Navigation size={20}/>
-          </div>
+      {/* CABECERA DINÁMICA - No tapa el mapa */}
+      <header className="bg-blue-700 text-white p-4 shadow-lg z-20">
+        <div className="flex justify-between items-center max-w-4xl mx-auto">
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">Distancia</p>
-            <p className="text-lg font-black text-slate-800 leading-none">{etapaActual.dist}</p>
+            <h1 className="text-xl font-bold flex items-center gap-2">
+              <Navigation size={24} className="text-yellow-400" />
+              Buen Camino PWA
+            </h1>
+            <p className="text-xs text-blue-100 opacity-80">Camino Francés • {currentStage.dist} a la meta</p>
+          </div>
+          <div className="bg-blue-800 px-3 py-1 rounded-full text-sm font-medium border border-blue-500">
+            Etapa {currentStage.id}
           </div>
         </div>
+      </header>
+
+      {/* ÁREA PRINCIPAL */}
+      <main className="flex-1 relative overflow-hidden">
         
-        <button onClick={() => setShowSelector(true)} className="glass p-3 rounded-2xl pointer-events-auto flex items-center gap-2 shadow-lg">
-          <div className="text-right">
-            <p className="text-[10px] font-bold text-blue-600 uppercase leading-none">Etapa {selectedEtapa}</p>
-            <p className="font-bold text-slate-800 text-sm leading-none truncate max-w-[80px]">
-              {etapaActual.n.split('-')[1] || etapaActual.n}
-            </p>
-          </div>
-          <ListFilter size={18} className="text-slate-400" />
-        </button>
-      </div>
+        {/* BOTONES DE NAVEGACIÓN FLOTANTES (CORREGIDOS) */}
+        <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2">
+          <button 
+            onClick={() => setActiveTab('mapa')}
+            className={`p-3 rounded-xl shadow-xl transition-all ${activeTab === 'mapa' ? 'bg-blue-600 text-white scale-110' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+          >
+            <MapIcon size={24} />
+            <span className="text-[10px] block font-bold mt-1">MAPA</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('guia')}
+            className={`p-3 rounded-xl shadow-xl transition-all ${activeTab === 'guia' ? 'bg-blue-600 text-white scale-110' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+          >
+            <BookOpen size={24} />
+            <span className="text-[10px] block font-bold mt-1">GUÍA</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('sellos')}
+            className={`p-3 rounded-xl shadow-xl transition-all ${activeTab === 'sellos' ? 'bg-blue-600 text-white scale-110' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+          >
+            <Stamp size={24} />
+            <span className="text-[10px] block font-bold mt-1">SELLOS</span>
+          </button>
+        </div>
 
-      <main className="w-full h-full relative">
-        {view === 'map' ? (
-          <div className="w-full h-full">
-            <MapContainer center={etapaActual.coords} zoom={13} zoomControl={false} attributionControl={false}>
-              <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
-              <Polyline positions={etapas.map(e => e.coords)} color="#3b82f6" weight={5} opacity={0.3} />
-              
-              {etapas.map(e => (
+        {/* CONTENIDO SEGÚN PESTAÑA */}
+        {activeTab === 'mapa' && (
+          <div className="h-full w-full">
+            <MapContainer center={currentStage.coords} zoom={8} className="h-full w-full">
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <Polyline positions={polylineRoute} color="#2563eb" weight={4} opacity={0.7} dashArray="10, 10" />
+              {stages.map((stage) => (
                 <Marker 
-                  key={e.id} 
-                  position={e.coords} 
-                  icon={createCustomIcon(selectedEtapa === e.id ? '#3b82f6' : '#cbd5e1')} 
-                  eventHandlers={{ click: () => setSelectedEtapa(e.id) }}
-                />
+                  key={stage.id} 
+                  position={stage.coords} 
+                  icon={createCustomIcon(stage.id === currentStage.id ? '#f59e0b' : '#3b82f6')}
+                  eventHandlers={{ click: () => setCurrentStage(stage) }}
+                >
+                  <Popup>
+                    <div className="font-sans">
+                      <strong className="text-blue-700">Etapa {stage.id}</strong><br/>
+                      {stage.name}<br/>
+                      <span className="text-slate-500 text-xs">{stage.dist}</span>
+                    </div>
+                  </Popup>
+                </Marker>
               ))}
-
-              {userPos && (
-                <Marker position={userPos} icon={new L.DivIcon({ 
-                  html: `<div class="pulse-user"></div>`, className: '' 
-                })} />
-              )}
-              <MapController userPos={userPos} isTracking={isTracking} center={etapaActual.coords} />
+              <ChangeView center={currentStage.coords} />
             </MapContainer>
 
-            {/* BOTONES SOS Y TRACKING */}
-            <div className="absolute bottom-32 right-4 z-[4000] flex flex-col gap-3">
-              <a href="tel:112" className="bg-red-600 text-white p-4 rounded-full shadow-2xl animate-sos">
-                <ShieldAlert size={28}/>
-              </a>
-              <button 
-                onClick={() => setIsTracking(!isTracking)} 
-                className={`p-4 rounded-full shadow-2xl border-2 border-white transition-all ${isTracking ? 'bg-blue-600 text-white' : 'bg-white text-slate-400'}`}
-              >
-                <Crosshair size={28}/>
-              </button>
+            {/* SELECTOR DE ETAPAS INFERIOR */}
+            <div className="absolute bottom-6 left-0 right-0 z-[1000] px-4">
+              <div className="max-w-md mx-auto bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-2xl border border-white">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Seleccionar Etapa</span>
+                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">{currentStage.id} / 34</span>
+                </div>
+                <select 
+                  className="w-full p-3 bg-slate-100 rounded-xl border-none text-slate-700 font-medium focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                  value={currentStage.id}
+                  onChange={(e) => setCurrentStage(stages.find(s => s.id === parseInt(e.target.value)))}
+                >
+                  {stages.map(s => (
+                    <option key={s.id} value={s.id}>Etapa {s.id}: {s.name.substring(0, 30)}...</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
-        ) : view === 'awards' ? (
-          <div className="w-full h-full overflow-y-auto pt-24 pb-36 px-6 bg-white hide-scrollbar">
-            <h2 className="text-4xl font-black text-slate-800 mb-2">Credencial</h2>
-            <p className="text-slate-400 mb-8 italic">Colecciona los sellos del Camino</p>
-            <div className="grid grid-cols-3 gap-4">
-              {etapas.map(e => (
-                <button 
-                  key={e.id} 
-                  onClick={() => addStamp(e.id)} 
-                  className={`aspect-square rounded-3xl border-2 flex flex-col items-center justify-center transition-all ${stamps.includes(e.id) ? 'border-blue-500 bg-blue-50' : 'border-dashed border-slate-200 opacity-60'}`}
+        )}
+
+        {activeTab === 'guia' && (
+          <div className="h-full overflow-y-auto p-6 bg-white">
+            <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+              <BookOpen className="text-blue-600" /> Guía de Etapas
+            </h2>
+            <div className="space-y-4">
+              {stages.map(s => (
+                <div 
+                  key={s.id}
+                  onClick={() => { setCurrentStage(s); setActiveTab('mapa'); }}
+                  className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${s.id === currentStage.id ? 'border-blue-500 bg-blue-50' : 'border-slate-100 hover:border-blue-200'}`}
                 >
-                  {stamps.includes(e.id) ? (
-                    <Heart size={30} className="text-red-500" fill="currentColor"/>
-                  ) : (
-                    <span className="text-xl font-black text-slate-300">{e.id}</span>
-                  )}
-                </button>
+                  <div className="flex gap-4 items-center">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${s.id === currentStage.id ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                      {s.id}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-700">{s.name}</h3>
+                      <p className="text-sm text-slate-500">{s.dist} de recorrido</p>
+                    </div>
+                  </div>
+                  <ChevronRight size={20} className="text-slate-300" />
+                </div>
               ))}
             </div>
           </div>
-        ) : (
-          <div className="w-full h-full pt-24 pb-36 px-6 bg-slate-50 overflow-y-auto hide-scrollbar">
-             <div className="bg-white p-6 rounded-[35px] shadow-sm mb-6 border border-slate-100">
-               <h3 className="font-black text-2xl text-slate-800 mb-2">{etapaActual.n}</h3>
-               <div className="bg-amber-50 p-4 rounded-2xl flex items-center gap-3">
-                 <Lightbulb className="text-amber-500" size={20}/>
-                 <p className="text-sm text-amber-900 font-medium italic">"{etapaActual.c}"</p>
-               </div>
-             </div>
-             
-             <div className="bg-white p-6 rounded-[35px] shadow-sm border border-slate-100">
-               <h4 className="font-bold text-slate-400 text-xs uppercase mb-4 flex items-center gap-2">
-                 <BookOpen size={16}/> Mi Diario
-               </h4>
-               <textarea 
-                value={notes[selectedEtapa] || ''}
-                onChange={(e) => {
-                  const newNotes = {...notes, [selectedEtapa]: e.target.value};
-                  setNotes(newNotes);
-                  localStorage.setItem('camino_notes_v3', JSON.stringify(newNotes));
-                }}
-                className="w-full h-48 p-2 text-slate-700 bg-transparent border-none focus:ring-0 text-lg" 
-                placeholder="¿Cómo te sientes hoy?"
-               />
-               <button className="w-full mt-4 py-4 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2">
-                 <Camera size={20}/> Guardar Recuerdo
-               </button>
-             </div>
+        )}
+
+        {activeTab === 'sellos' && (
+          <div className="h-full flex flex-col items-center justify-center p-10 text-center bg-slate-50">
+            <div className="w-24 h-24 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-6">
+              <Stamp size={48} />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Credencial Digital</h2>
+            <p className="text-slate-500 max-w-xs">Aquí podrás coleccionar los sellos de los albergues escaneando códigos QR.</p>
+            <button className="mt-8 bg-blue-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-blue-700 transition-colors">
+              Escanear Sello
+            </button>
           </div>
         )}
       </main>
-
-      {/* NAVEGACIÓN INFERIOR */}
-      <nav className="absolute bottom-6 left-6 right-6 h-20 glass rounded-[35px] flex justify-around items-center z-[5000] shadow-2xl border border-white/50">
-        <button onClick={() => setView('map')} className={`flex flex-col items-center gap-1 transition-all ${view === 'map' ? 'text-blue-600 scale-110' : 'text-slate-300'}`}>
-          <MapIcon size={28}/><span className="text-[10px] font-black uppercase">Mapa</span>
-        </button>
-        <button onClick={() => setView('info')} className={`flex flex-col items-center gap-1 transition-all ${view === 'info' ? 'text-blue-600 scale-110' : 'text-slate-300'}`}>
-          <Info size={28}/><span className="text-[10px] font-black uppercase">Guía</span>
-        </button>
-        <button onClick={() => setView('awards')} className={`flex flex-col items-center gap-1 transition-all ${view === 'awards' ? 'text-blue-600 scale-110' : 'text-slate-300'}`}>
-          <Award size={28}/><span className="text-[10px] font-black uppercase">Sellos</span>
-        </button>
-      </nav>
-
-      {/* MODAL SELECTOR DE ETAPAS */}
-      {showSelector && (
-        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-end" onClick={() => setShowSelector(false)}>
-          <div className="w-full bg-white rounded-t-[45px] p-6 max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="w-12 h-1.5 bg-slate-100 rounded-full mx-auto mb-6"></div>
-            <h3 className="text-2xl font-black text-slate-800 mb-6 px-2">Seleccionar Etapa</h3>
-            <div className="flex-1 overflow-y-auto hide-scrollbar space-y-2 pb-10">
-              {etapas.map(e => (
-                <button 
-                  key={e.id} 
-                  onClick={() => { setSelectedEtapa(e.id); setShowSelector(false); setIsTracking(false); }} 
-                  className={`w-full p-5 rounded-3xl flex justify-between items-center transition-all ${selectedEtapa === e.id ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-600'}`}
-                >
-                  <div className="flex items-center gap-4 text-left">
-                    <span className="font-black opacity-40">#{e.id}</span>
-                    <span className="font-bold">{e.n}</span>
-                  </div>
-                  <ChevronRight size={18}/>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
-};
-
-export default App;
+}
