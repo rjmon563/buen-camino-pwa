@@ -90,13 +90,13 @@ const App = () => {
   const [isTracking, setIsTracking] = useState(false);
   const [heading, setHeading] = useState(0);
   const [showSelector, setShowSelector] = useState(false);
-  const [isSecure, setIsSecure] = useState(window.location.protocol === 'https:');
+  const [isSecure] = useState(window.location.protocol === 'https:');
   
   // Persistencia de datos
   const [stamps, setStamps] = useState(() => JSON.parse(localStorage.getItem('camino_stamps_final') || '[]'));
   const [notes, setNotes] = useState(() => JSON.parse(localStorage.getItem('camino_notes_final') || '{}'));
 
-  // DATA: 34 ETAPAS COMPLETAS (Sin simplificar)
+  // DATA: 34 ETAPAS COMPLETAS
   const etapas = useMemo(() => [
     { id: 1, n: "SJ Pied de Port - Roncesvalles", dist: "24.2 km", desnivel: "+1250m", diff: "Muy Alta", coords: [43.1635, -1.2358], c: "Cruce de Pirineos por la Ruta de Napoleón.", temp: "14°C", clima: "Nubes" },
     { id: 2, n: "Roncesvalles - Zubiri", dist: "21.4 km", desnivel: "-800m", diff: "Media", coords: [43.0092, -1.3194], c: "Bajada técnica de Erro y Mezkiritz.", temp: "18°C", clima: "Sol" },
@@ -136,7 +136,7 @@ const App = () => {
 
   const etapaActual = useMemo(() => etapas.find(e => e.id === selectedEtapa) || etapas[0], [selectedEtapa, etapas]);
 
-  // GPS y Orientación (Mejorado para móvil)
+  // GPS y Orientación
   useEffect(() => {
     if (!navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
@@ -174,7 +174,6 @@ const App = () => {
     <div className="fixed inset-0 flex flex-col bg-slate-50 overflow-hidden">
       <GlobalStyles />
       
-      {/* Aviso modo local */}
       {!isSecure && (
         <div className="absolute top-[var(--sat)] left-0 right-0 z-[7000] bg-amber-500 text-white text-[10px] font-bold py-2 px-4 flex items-center justify-center gap-2 shadow-lg">
           <AlertTriangle size={14} /> MODO TEST: EL GPS REQUIERE HTTPS PARA SER PRECISO
@@ -200,7 +199,6 @@ const App = () => {
         </button>
       </div>
 
-      {/* CONTENIDO PRINCIPAL */}
       <main className="flex-1 relative">
         {view === 'map' ? (
           <div className="w-full h-full">
@@ -225,14 +223,15 @@ const App = () => {
               <MapController userPos={userPos} isTracking={isTracking} />
             </MapContainer>
             
-            {/* BOTONES FLOTANTES DE ACCIÓN */}
             <div className="absolute bottom-44 right-6 z-[4000] flex flex-col gap-4">
               <div className="flex flex-col gap-3">
                 <a href="tel:112" className="bg-red-600 text-white p-4 rounded-2xl shadow-2xl animate-sos border-2 border-white/50 flex flex-col items-center"><ShieldAlert size={26} /><span className="text-[8px] font-black mt-1">112</span></a>
                 <a href="tel:062" className="bg-emerald-800 text-white p-4 rounded-2xl shadow-2xl border-2 border-white/50 flex flex-col items-center"><Phone size={26} /><span className="text-[8px] font-black mt-1">062</span></a>
               </div>
               
-              <a href="https://wa.me/?text=¡Hola! Estoy en el Camino de Santiago. Mi ubicación es: https://maps.google.com/?q=${userPos ? userPos[0] : ''},${userPos ? userPos[1] : ''}" target="_blank" rel="noreferrer" className="bg-green-500 text-white p-5 rounded-full shadow-2xl border-4 border-white active:scale-90"><MessageCircle size={32} /></a>
+              <a href={`https://wa.me/?text=¡Hola! Estoy en el Camino de Santiago. Ubicación: https://www.google.com/maps?q=${userPos ? userPos[0] : ''},${userPos ? userPos[1] : ''}`} target="_blank" rel="noreferrer" className="bg-green-500 text-white p-5 rounded-full shadow-2xl border-4 border-white active:scale-90 flex items-center justify-center">
+                <MessageCircle size={32} />
+              </a>
               
               <div className="flex flex-col gap-3">
                 <button onClick={() => setIsTracking(!isTracking)} className={`p-6 rounded-full shadow-2xl border-4 border-white transition-all ${isTracking ? 'bg-blue-600 text-white scale-110 shadow-blue-300' : 'bg-white text-slate-300'}`}><Crosshair size={30} /></button>
@@ -244,22 +243,22 @@ const App = () => {
           </div>
         ) : view === 'info' ? (
           <div className="w-full h-full overflow-y-auto pt-40 pb-52 px-6 hide-scrollbar bg-slate-50">
-            {/* Tarjeta de Etapa */}
             <div className="bg-white p-8 rounded-[45px] shadow-sm border border-slate-100 mb-6">
               <h2 className="text-3xl font-black text-slate-800 leading-tight mb-8 tracking-tighter">{etapaActual.n}</h2>
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100"><TrendingUp className="text-blue-500 mb-3" size={26}/><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Desnivel</p><p className="font-black text-slate-700 text-lg">{etapaActual.desnivel}</p></div>
-                <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">{etapaActual.clima === 'Sol' ? <Sun className="text-orange-500 mb-3" size={26}/> : <CloudRain className="text-blue-500 mb-3" size={26}/><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clima</p><p className="font-black text-slate-700 text-lg">{etapaActual.temp}</p></div>
+                <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                  {etapaActual.clima === 'Sol' ? <Sun className="text-orange-500 mb-3" size={26}/> : <CloudRain className="text-blue-500 mb-3" size={26}/>}
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clima</p><p className="font-black text-slate-700 text-lg">{etapaActual.temp}</p>
+                </div>
               </div>
             </div>
 
-            {/* Sabiduría del Camino */}
             <div className="bg-amber-50 p-8 rounded-[40px] border border-amber-100 flex gap-6 mb-6 shadow-sm">
               <Lightbulb className="text-amber-500 shrink-0" size={28}/>
               <p className="text-base font-medium text-amber-900 italic leading-relaxed">"{etapaActual.c}"</p>
             </div>
 
-            {/* Diario Digital */}
             <div className="bg-white rounded-[50px] p-8 shadow-sm border border-slate-100">
               <h3 className="font-black text-xs uppercase text-slate-400 mb-6 flex items-center gap-3"><BookOpen size={24} className="text-blue-600"/> Mi Diario Personal</h3>
               <textarea 
@@ -293,14 +292,12 @@ const App = () => {
         )}
       </main>
 
-      {/* MENÚ DE NAVEGACIÓN INFERIOR (Area Segura) */}
       <nav className="absolute bottom-[calc(1.5rem+var(--sab))] left-8 right-8 h-24 glass rounded-[45px] shadow-2xl flex justify-around items-center z-[5000] border border-white/50">
         <button onClick={() => setView('map')} className={`flex flex-col items-center gap-1 transition-all ${view === 'map' ? 'text-blue-600 scale-110' : 'text-slate-300'}`}><MapIcon size={32} /><span className="text-[10px] font-black uppercase tracking-tighter">Mapa</span></button>
         <button onClick={() => setView('info')} className={`flex flex-col items-center gap-1 transition-all ${view === 'info' ? 'text-blue-600 scale-110' : 'text-slate-300'}`}><Info size={32} /><span className="text-[10px] font-black uppercase tracking-tighter">Guía</span></button>
         <button onClick={() => setView('awards')} className={`flex flex-col items-center gap-1 transition-all ${view === 'awards' ? 'text-blue-600 scale-110' : 'text-slate-300'}`}><Award size={32} /><span className="text-[10px] font-black uppercase tracking-tighter">Sellos</span></button>
       </nav>
 
-      {/* SELECTOR DE ETAPAS (Drawer) */}
       {showSelector && (
         <div className="fixed inset-0 z-[6000] bg-slate-900/60 backdrop-blur-sm flex items-end" onClick={() => setShowSelector(false)}>
           <div className="w-full bg-white rounded-t-[60px] p-10 max-h-[85vh] flex flex-col shadow-2xl pb-[calc(2rem+var(--sab))]" onClick={e => e.stopPropagation()}>
