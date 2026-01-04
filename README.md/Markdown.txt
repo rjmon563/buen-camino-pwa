@@ -1,0 +1,19 @@
+# 🐚 Buen Camino - PWA del Peregrino
+
+Aplicación profesional diseñada para el Camino de Santiago, optimizada para uso en ruta con capacidades offline y gestión de credencial digital.
+
+## 🚀 Estructura del Proyecto
+- **/public**: Contiene el `sw.js` (Service Worker) para el funcionamiento sin internet y el `manifest.json`.
+- **/src**: Contiene la lógica central (`App.jsx`), estilos (`index.css`) y el registro del SW (`main.jsx`).
+
+## 🛠️ Tecnologías Utilizadas
+- **React + Vite**: Motor de la aplicación rápido y ligero.
+- **Tailwind CSS**: Diseño moderno, responsive y optimizado para móviles.
+- **Leaflet**: Mapas interactivos con soporte de filtrado.
+- **Lucide React**: Iconografía minimalista y clara.
+
+## 📦 Instalación y Desarrollo
+1. Abrir la terminal en la carpeta `/buen-camino-pwa`.
+2. Instalar dependencias:
+   ```bash
+   npm install
