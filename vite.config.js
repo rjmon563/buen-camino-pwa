@@ -4,9 +4,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: '0.0.0.0', // Esto permite que el móvil vea el ordenador
-    port: 5173,
-    strictPort: true,
-    allowedHosts: 'all' // Esto elimina el error 3200 de Ngrok
+    host: true,
+    port: 5173
   }
 })

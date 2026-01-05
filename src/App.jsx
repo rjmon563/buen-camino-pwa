@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import { 
   Target, MessageCircle, Activity, Zap, Wind, 
   Thermometer, Droplets, Footprints, Navigation2 
