@@ -63,7 +63,6 @@ const STAGES = [
   { id:33, name:"Santiago de Compostela", dist:0, coords:[42.8806,-8.5464] }
 ];
 
-/* ================== MAP CTRL ================== */
 function MapController({ userPos, tracking, target }) {
   const map = useMap();
   useEffect(() => {
@@ -73,7 +72,6 @@ function MapController({ userPos, tracking, target }) {
   return null;
 }
 
-/* ================== APP ================== */
 export default function App() {
   const [activeStage, setActiveStage] = useState(() => JSON.parse(localStorage.getItem('stage_v30')) || STAGES[0]);
   const [steps, setSteps] = useState(() => parseInt(localStorage.getItem('steps_v30')) || 0);
@@ -143,7 +141,7 @@ export default function App() {
   }, [userPos]);
 
   const resetSteps = () => {
-    if (confirm("¿Reiniciar contadores de misión?")) {
+    if (confirm("¿Reiniciar sistema?")) {
       setSteps(0);
       setStageStartSteps(0);
       localStorage.setItem('stage_start_v30', 0);
@@ -168,29 +166,40 @@ export default function App() {
       <header className="h-16 flex justify-between items-center px-6 border-b border-yellow-500 bg-black z-[1001]">
         <div className="flex items-center gap-2">
           <Zap className="text-yellow-500" fill="currentColor" size={20}/>
-          <span className="text-yellow-500 font-black italic text-xs">V32.0_FULL_CAMINO</span>
+          <span className="text-yellow-500 font-black italic text-xs">V32.1_PATH_FIX</span>
         </div>
-        <span className="text-yellow-500 font-bold text-[10px] uppercase">E{activeStage.id}: {activeStage.name}</span>
+        <span className="text-yellow-500 font-bold text-[10px]">E{activeStage.id}: {activeStage.name}</span>
       </header>
 
       <div className="tactical-panel">
         <div className="mb-2">
-          <div className="text-[8px] text-white/40 font-bold tracking-tighter">TOTAL_MISSION_STEPS</div>
+          <div className="text-[8px] text-white/40 font-bold">TOTAL_STEPS</div>
           <div className="text-lg font-black text-yellow-500">{steps.toLocaleString()}</div>
         </div>
         <div>
-          <div className="text-[8px] text-white/40 font-bold tracking-tighter">CURRENT_STAGE_STEPS</div>
+          <div className="text-[8px] text-white/40 font-bold">STAGE_STEPS</div>
           <div className="text-lg font-black text-cyan-400">{(steps - stageStartSteps).toLocaleString()}</div>
         </div>
         <div className="mt-2 pt-2 border-t border-white/10">
-          <div className="text-[8px] text-white/40 font-bold">RANGE_TO_OBJ</div>
+          <div className="text-[8px] text-white/40 font-bold">RANGE</div>
           <div className="text-xs font-bold text-white">{getDistance()} KM</div>
         </div>
       </div>
 
       <MapContainer center={activeStage.coords} zoom={14} zoomControl={false} style={{flex:1}}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
-        <Polyline positions={STAGES.map(s=>s.coords)} color="#00e5ff" weight={3} dashArray="10, 10"/>
+        
+        {/* LÍNEA AZUL REFORZADA: visible y sólida */}
+        <Polyline 
+          positions={STAGES.map(s => s.coords)} 
+          pathOptions={{
+            color: '#00e5ff', 
+            weight: 6, 
+            opacity: 0.8,
+            lineJoin: 'round'
+          }}
+        />
+
         {userPos && (
           <Marker position={userPos} icon={new L.DivIcon({
             html:`<div class="sniper-scope-marker"><div class="scope-cross-h"></div><div class="scope-cross-v"></div><div class="scope-circle"></div><div class="scope-pulse"></div></div>`,
