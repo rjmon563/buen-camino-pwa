@@ -10,7 +10,7 @@ import {
 
 const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
-  :root { --yellow: #facc15; --red: #ff0000; --green: #22c55e; --black: #000; --gray: #1a1a1a; }
+  :root { --yellow: #facc15; --red: #ff0000; --green: #22c55e; --black: #000; --gray: #1a1a1a; --cyan: #00e5ff; }
   body, html, #root { margin: 0; padding: 0; height: 100vh; width: 100vw; background: var(--black) !important; font-family: 'JetBrains Mono', monospace; color: white; overflow: hidden; }
   .sidebar-tactical { width: 45%; background: var(--black); border-right: 2px solid var(--gray); display: flex; flex-direction: column; height: 100%; }
   .pedometer-dashboard { background: linear-gradient(180deg, #111 0%, #000 100%); padding: 15px; border-bottom: 2px solid var(--yellow); display: flex; justify-content: space-between; align-items: center; }
@@ -27,6 +27,11 @@ const STYLES = `
   .floating-controls { position: absolute; bottom: 20px; right: 20px; z-index: 5000; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
   .btn-tactical { width: 55px; height: 55px; border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(0,0,0,0.8); cursor: pointer; border: none; transition: transform 0.2s; }
   .btn-tactical:active { transform: scale(0.9); }
+  
+  /* CAMBIO: BOTÓN SOS REDONDO ROJO SEGÚN TU FOTO */
+  .btn-sos-red-circle { width: 65px; height: 65px; border-radius: 50%; background: var(--red); color: white; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; border: 4px solid rgba(255,255,255,0.2); box-shadow: 0 0 25px var(--red); cursor: pointer; }
+  
+  .btn-emergency-pill { background: #22c55e; color: white; padding: 12px 20px; border-radius: 40px; font-size: 11px; font-weight: 900; display: flex; align-items: center; gap: 8px; box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); border: none; cursor: pointer; text-align: left; }
   .btn-gps-wa { background: #25D366; color: black; padding: 10px 15px; border-radius: 30px; font-size: 10px; font-weight: 900; display: flex; align-items: center; gap: 8px; box-shadow: 0 0 15px rgba(37, 211, 102, 0.4); border: none; cursor: pointer; }
   .distance-tag { background: rgba(37, 99, 235, 0.2); border: 1px solid #2563eb; color: #60a5fa; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; margin-top: 5px; display: inline-flex; align-items: center; gap: 5px; }
 `;
@@ -120,7 +125,7 @@ export default function App() {
 
   const sendEmergencyWhatsApp = () => {
     if (!userPos) return alert("Buscando señal GPS...");
-    const msg = `EMERGENCIA: GPS http://maps.google.com/maps?q=${userPos[0]},${userPos[1]}`;
+    const msg = `EMERGENCIA: GPS http://googleusercontent.com/maps.google.com/3{userPos[0]},${userPos[1]}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
@@ -187,12 +192,18 @@ export default function App() {
             <button onClick={sendEmergencyWhatsApp} className="btn-gps-wa">
               <MessageCircle size={16} fill="black" /> ENVIAR GPS
             </button>
-            <button onClick={() => window.location.href="tel:112"} className="btn-tactical bg-red-600">
-              <ShieldAlert size={28} color="white" />
+            
+            {/* CAMBIO: BOTÓN SOS ROJO CIRCULAR SEGÚN TU FOTO */}
+            <div className="btn-sos-red-circle" onClick={() => window.location.href="tel:112"}>
+              SOS
+            </div>
+
+            {/* CAMBIO: BOTÓN EMERGENCIA VERDE ALARGADO SEGÚN TU FOTO */}
+            <button onClick={() => window.location.href="tel:112"} className="btn-emergency-pill">
+              <PhoneCall size={18} fill="white" />
+              <div>112 Emergencias<br/><span style={{fontSize:'8px', opacity:0.7}}>062 Guardia Civil</span></div>
             </button>
-            <button onClick={() => window.location.href="tel:062"} className="btn-tactical bg-black border-2 border-red-600">
-              <PhoneCall size={24} color="#ff0000" />
-            </button>
+
             <button onClick={() => setIsTracking(!isTracking)} className="btn-tactical bg-yellow-500">
               <Crosshair size={28} color="black" />
             </button>
@@ -200,7 +211,10 @@ export default function App() {
 
           <MapContainer center={activeStage.coords} zoom={13} zoomControl={false} style={{height: "100%", width: "100%"}}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            <Polyline positions={STAGES.map(s => s.coords)} color="#facc15" weight={3} opacity={0.6} dashArray="10, 10" />
+            
+            {/* CAMBIO: LÍNEA AZUL (CYAN) DE LAS ETAPAS */}
+            <Polyline positions={STAGES.map(s => s.coords)} color="#00e5ff" weight={4} opacity={0.8} />
+            
             {userPos && (
               <Marker position={userPos} icon={new L.DivIcon({
                 html: `<div class="sniper-scope-marker"><div class="scope-cross-h"></div><div class="scope-cross-v"></div><div class="scope-circle"></div><div class="scope-pulse"></div></div>`,
