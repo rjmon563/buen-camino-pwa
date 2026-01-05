@@ -24,8 +24,8 @@ html,body,#root{margin:0;height:100%;background:var(--black);font-family:'JetBra
 
 .tactical-stats{position:fixed; top:20px; right:20px; z-index:1000; background:rgba(0,0,0,0.9); border:2px solid var(--cyan); padding:10px; border-radius:8px; min-width:140px; text-align:right; pointer-events:none;}
 .selector-container{position:fixed; top:20px; left:20px; z-index:5000; width:220px;}
-select { background: #111; color: var(--yellow); border: 2px solid var(--yellow); padding: 12px; font-family: 'JetBrains Mono'; border-radius: 6px; width: 100%; font-size: 11px; font-weight: 800; cursor:pointer; -webkit-appearance: none; }
-.stage-info-box { background: rgba(0,0,0,0.9); color: var(--orange); border: 2px solid var(--orange); border-top: 0; padding: 6px 10px; font-size: 10px; font-weight: 800; border-radius: 0 0 8px 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+select { background: #111; color: var(--yellow); border: 2px solid var(--yellow); padding: 12px; font-family: 'JetBrains Mono'; border-radius: 6px; width: 100%; font-size: 11px; font-weight: 800; cursor:pointer; }
+.stage-info-box { background: rgba(0,0,0,0.9); color: var(--orange); border: 2px solid var(--orange); border-top: 0; padding: 6px 10px; font-size: 10px; font-weight: 800; border-radius: 0 0 8px 8px; }
 
 .bottom-console { position: fixed; bottom: 0; left: 0; right: 0; background: #0a0a0a; border-top: 3px solid var(--yellow); display: flex; justify-content: space-around; align-items: center; padding: 12px 10px 25px 10px; z-index: 6000; }
 .btn-ui { border-radius: 16px; border: 2px solid rgba(255,255,255,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.2s; position: relative; }
@@ -43,7 +43,7 @@ select { background: #111; color: var(--yellow); border: 2px solid var(--yellow)
 .sensor-overlay{position:fixed;inset:0;background:black;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center}
 `;
 
-/* ===================== FULL DATABASE: 33 STAGES ===================== */
+/* ===================== DATA: 33 STAGES ===================== */
 const STAGES = [
   { id:1, name:"SJ Pied de Port - Roncesvalles", coords:[43.0125,-1.3148], dist:24.2, dPlus:1250, diff:"Muy Alta" },
   { id:2, name:"Roncesvalles - Zubiri", coords:[42.9298,-1.5042], dist:21.4, dPlus:300, diff:"Alta" },
@@ -80,19 +80,29 @@ const STAGES = [
   { id:33, name:"Santiago de Compostela", coords:[42.8806,-8.5464], dist:0, dPlus:0, diff:"META" }
 ];
 
-function MapController({ userPos, tracking }) {
+function MapController({ userPos, tracking, targetCoords }) {
   const map = useMap();
+  
+  // EFECTO 1: SEGUIMIENTO GPS (MIRA)
   useEffect(() => {
     if (tracking && userPos) {
       map.setView(userPos, 17, { animate: true });
     }
   }, [userPos, tracking, map]);
+
+  // EFECTO 2: VUELO A LA ETAPA AL SELECCIONARLA
+  useEffect(() => {
+    if (targetCoords && !tracking) {
+      map.flyTo(targetCoords, 14, { duration: 1.5 });
+    }
+  }, [targetCoords, map]); // Eliminamos tracking de aquí para que vuele siempre que cambie target y no estemos lockeados
+
   return null;
 }
 
 export default function App() {
-  const [activeStage, setActiveStage] = useState(() => JSON.parse(localStorage.getItem('stage_v50')) || STAGES[0]);
-  const [steps, setSteps] = useState(() => parseInt(localStorage.getItem('steps_v50')) || 0);
+  const [activeStage, setActiveStage] = useState(() => JSON.parse(localStorage.getItem('stage_v51')) || STAGES[0]);
+  const [steps, setSteps] = useState(() => parseInt(localStorage.getItem('steps_v51')) || 0);
   const [userPos, setUserPos] = useState(null);
   const [isTracking, setIsTracking] = useState(false);
   const [batterySave, setBatterySave] = useState(false);
@@ -101,8 +111,8 @@ export default function App() {
   const lastStepTime = useRef(0);
 
   useEffect(() => {
-    localStorage.setItem('steps_v50', steps);
-    localStorage.setItem('stage_v50', JSON.stringify(activeStage));
+    localStorage.setItem('steps_v51', steps);
+    localStorage.setItem('stage_v51', JSON.stringify(activeStage));
   }, [steps, activeStage]);
 
   useEffect(() => {
@@ -134,12 +144,13 @@ export default function App() {
   }, [batterySave]);
 
   const distanceToTarget = useMemo(() => {
-    if (!userPos) return 0;
+    if (!userPos) return 0.00; // FIX KM: Si no hay posición, forzamos 0.00
     const R = 6371;
     const dLat = (activeStage.coords[0] - userPos[0]) * Math.PI / 180;
     const dLon = (activeStage.coords[1] - userPos[1]) * Math.PI / 180;
     const a = Math.sin(dLat/2)**2 + Math.cos(userPos[0]*Math.PI/180) * Math.cos(activeStage.coords[0]*Math.PI/180) * Math.sin(dLon/2)**2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return dist;
   }, [userPos, activeStage]);
 
   return (
@@ -147,7 +158,7 @@ export default function App() {
       {showOverlay && (
         <div className="sensor-overlay">
           <ShieldCheck size={80} className="text-cyan-500 mb-6 animate-pulse"/>
-          <button onClick={() => setShowOverlay(false)} className="px-12 py-5 bg-cyan-500 text-black font-black rounded-2xl">ESTABILIZAR v50</button>
+          <button onClick={() => setShowOverlay(false)} className="px-12 py-5 bg-cyan-500 text-black font-black rounded-2xl">V51: FLY & TRACK</button>
         </div>
       )}
 
@@ -155,9 +166,9 @@ export default function App() {
         <select value={activeStage.id} onChange={(e) => {
           const s = STAGES.find(x => x.id === parseInt(e.target.value));
           setActiveStage(s);
-          setIsTracking(false);
+          setIsTracking(false); // Al elegir etapa nueva, quitamos el lock para ver el destino
         }}>
-          {STAGES.map(s => <option key={s.id} value={s.id}>Etapa {s.id}: {s.name.substring(0,15)}...</option>)}
+          {STAGES.map(s => <option key={s.id} value={s.id}>Etapa {s.id}: {s.name.substring(0,12)}...</option>)}
         </select>
         <div className="stage-info-box">
           {activeStage.dist}KM | +{activeStage.dPlus}m | {activeStage.diff}
@@ -172,22 +183,22 @@ export default function App() {
 
       <MapContainer center={activeStage.coords} zoom={14} zoomControl={false} style={{ flex: 1 }}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
-        <Polyline positions={STAGES.map(s => s.coords)} pathOptions={{ color: '#00e5ff', weight: 3, opacity: 0.5 }}/>
+        <Polyline positions={STAGES.map(s => s.coords)} pathOptions={{ color: '#00e5ff', weight: 3, opacity: 0.4 }}/>
         {userPos && (
           <Marker position={userPos} icon={new L.DivIcon({ 
             html: `<div class="sniper-scope-marker"><div class="scope-cross-h"></div><div class="scope-cross-v"></div><div class="scope-circle"></div><div class="scope-pulse"></div></div>`, 
             iconSize:[80,80], iconAnchor:[40,40] 
           })}/>
         )}
-        <MapController userPos={userPos} tracking={isTracking} />
+        <MapController userPos={userPos} tracking={isTracking} targetCoords={activeStage.coords} />
       </MapContainer>
 
       <div className="bottom-console">
         <div className="relative">
           {sosMenu && (
             <div className="emergency-popover">
-              <button onClick={() => window.open('tel:112')} className="pop-btn bg-red-600 border-white"><Phone size={20}/> 112 EMERGENCIA</button>
-              <button onClick={() => window.open('tel:062')} className="pop-btn bg-blue-800 border-white"><ShieldAlert size={20}/> 062 GUARDIA CIVIL</button>
+              <button onClick={() => window.open('tel:112')} className="pop-btn bg-red-600"><Phone size={20}/> 112 SOS</button>
+              <button onClick={() => window.open('tel:062')} className="pop-btn bg-blue-800"><ShieldAlert size={20}/> 062 GC</button>
             </div>
           )}
           <button onClick={() => setSosMenu(!sosMenu)} className="btn-ui btn-sos">
@@ -196,7 +207,7 @@ export default function App() {
         </div>
 
         <button onClick={() => window.open(`https://wa.me/?text=Reporte: Etapa ${activeStage.id}. Restan ${distanceToTarget.toFixed(2)} km.`)} className="btn-ui btn-wa">
-          <MessageCircle size={30}/><span className="font-black text-[9px]">WHATSAPP</span>
+          <MessageCircle size={30}/><span className="font-black text-[9px]">REPORT</span>
         </button>
 
         <button onClick={() => setIsTracking(!isTracking)} className={`btn-ui btn-mira ${isTracking ? 'bg-yellow-400 shadow-[0_0_20px_#facc15]' : 'opacity-80'}`}>
@@ -208,7 +219,7 @@ export default function App() {
           {batterySave ? <EyeOff size={32}/> : <Eye size={32}/>}
         </button>
 
-        <button onClick={() => { if(confirm("¿RESET PASOS?")) setSteps(0); }} className="btn-ui btn-reset">
+        <button onClick={() => { if(confirm("¿RESET?")) setSteps(0); }} className="btn-ui btn-reset">
           <RotateCcw size={32}/>
         </button>
       </div>
