@@ -35,15 +35,17 @@ select { background: #111; color: var(--yellow); border: 2px solid var(--yellow)
 .btn-mapa { background: var(--cyan); color: black; min-width: 70px; height: 70px; }
 .btn-reset { background: var(--orange); color: white; min-width: 70px; height: 70px; }
 
-.emergency-popover { position: absolute; bottom: 95px; left: 10px; display: flex; flex-direction: column; gap: 8px; width: 220px; z-index: 7000; }
-.pop-btn { padding: 15px; border-radius: 12px; border: 2px solid white; color: white; font-weight: 900; display: flex; align-items: center; gap: 10px; }
+.emergency-popover { position: absolute; bottom: 95px; left: 10px; display: flex; flex-direction: column; gap: 12px; width: 250px; z-index: 9000; }
+.sos-call-btn { padding: 20px; border-radius: 15px; border: 4px solid white; color: white !important; font-weight: 900; font-size: 16px; text-decoration: none; display: flex; align-items: center; gap: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+.bg-emergencia { background-color: #ff0000 !important; }
+.bg-guardia { background-color: #1b4d1b !important; border-color: #facc15 !important; }
 
 .lock-indicator { position: absolute; top: -10px; background: red; color: white; font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 800; animation: blink 1s infinite; border: 1px solid white; }
 @keyframes blink { 50% { opacity: 0; } }
 .sensor-overlay{position:fixed;inset:0;background:black;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center}
 `;
 
-/* ===================== DATA: 33 STAGES ===================== */
+/* ===================== FULL DATABASE: 33 STAGES ===================== */
 const STAGES = [
   { id:1, name:"SJ Pied de Port - Roncesvalles", coords:[43.0125,-1.3148], dist:24.2, dPlus:1250, diff:"Muy Alta" },
   { id:2, name:"Roncesvalles - Zubiri", coords:[42.9298,-1.5042], dist:21.4, dPlus:300, diff:"Alta" },
@@ -82,27 +84,24 @@ const STAGES = [
 
 function MapController({ userPos, tracking, targetCoords }) {
   const map = useMap();
-  
-  // EFECTO 1: SEGUIMIENTO GPS (MIRA)
   useEffect(() => {
     if (tracking && userPos) {
       map.setView(userPos, 17, { animate: true });
     }
   }, [userPos, tracking, map]);
 
-  // EFECTO 2: VUELO A LA ETAPA AL SELECCIONARLA
   useEffect(() => {
     if (targetCoords && !tracking) {
       map.flyTo(targetCoords, 14, { duration: 1.5 });
     }
-  }, [targetCoords, map]); // Eliminamos tracking de aquí para que vuele siempre que cambie target y no estemos lockeados
+  }, [targetCoords, map, tracking]);
 
   return null;
 }
 
 export default function App() {
-  const [activeStage, setActiveStage] = useState(() => JSON.parse(localStorage.getItem('stage_v51')) || STAGES[0]);
-  const [steps, setSteps] = useState(() => parseInt(localStorage.getItem('steps_v51')) || 0);
+  const [activeStage, setActiveStage] = useState(() => JSON.parse(localStorage.getItem('stage_v54')) || STAGES[0]);
+  const [steps, setSteps] = useState(() => parseInt(localStorage.getItem('steps_v54')) || 0);
   const [userPos, setUserPos] = useState(null);
   const [isTracking, setIsTracking] = useState(false);
   const [batterySave, setBatterySave] = useState(false);
@@ -111,8 +110,8 @@ export default function App() {
   const lastStepTime = useRef(0);
 
   useEffect(() => {
-    localStorage.setItem('steps_v51', steps);
-    localStorage.setItem('stage_v51', JSON.stringify(activeStage));
+    localStorage.setItem('steps_v54', steps);
+    localStorage.setItem('stage_v54', JSON.stringify(activeStage));
   }, [steps, activeStage]);
 
   useEffect(() => {
@@ -144,13 +143,15 @@ export default function App() {
   }, [batterySave]);
 
   const distanceToTarget = useMemo(() => {
-    if (!userPos) return 0.00; // FIX KM: Si no hay posición, forzamos 0.00
+    // BLINDAJE KM V54: Si no hay posición GPS REAL, mostramos 0.00
+    if (!userPos) return 0;
     const R = 6371;
     const dLat = (activeStage.coords[0] - userPos[0]) * Math.PI / 180;
     const dLon = (activeStage.coords[1] - userPos[1]) * Math.PI / 180;
     const a = Math.sin(dLat/2)**2 + Math.cos(userPos[0]*Math.PI/180) * Math.cos(activeStage.coords[0]*Math.PI/180) * Math.sin(dLon/2)**2;
     const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return dist;
+    // Si la distancia es mayor a 1000km, es un error de GPS inicial
+    return dist > 1000 ? 0 : dist;
   }, [userPos, activeStage]);
 
   return (
@@ -158,7 +159,7 @@ export default function App() {
       {showOverlay && (
         <div className="sensor-overlay">
           <ShieldCheck size={80} className="text-cyan-500 mb-6 animate-pulse"/>
-          <button onClick={() => setShowOverlay(false)} className="px-12 py-5 bg-cyan-500 text-black font-black rounded-2xl">V51: FLY & TRACK</button>
+          <button onClick={() => setShowOverlay(false)} className="px-12 py-5 bg-cyan-500 text-black font-black rounded-2xl">V54: FULL DATA START</button>
         </div>
       )}
 
@@ -166,7 +167,7 @@ export default function App() {
         <select value={activeStage.id} onChange={(e) => {
           const s = STAGES.find(x => x.id === parseInt(e.target.value));
           setActiveStage(s);
-          setIsTracking(false); // Al elegir etapa nueva, quitamos el lock para ver el destino
+          setIsTracking(false);
         }}>
           {STAGES.map(s => <option key={s.id} value={s.id}>Etapa {s.id}: {s.name.substring(0,12)}...</option>)}
         </select>
@@ -178,7 +179,7 @@ export default function App() {
       <div className="tactical-stats">
         <div className="text-[8px] text-cyan-400 font-bold uppercase">GPS_Live</div>
         <div className="text-xl font-black text-yellow-500">{steps.toLocaleString()} <span className="text-[7px] text-white/30">PASOS</span></div>
-        <div className="text-sm font-bold text-white">{userPos ? distanceToTarget.toFixed(2) : "0.00"} KM</div>
+        <div className="text-sm font-bold text-white">{(userPos && distanceToTarget > 0) ? distanceToTarget.toFixed(2) : "0.00"} KM</div>
       </div>
 
       <MapContainer center={activeStage.coords} zoom={14} zoomControl={false} style={{ flex: 1 }}>
@@ -197,8 +198,8 @@ export default function App() {
         <div className="relative">
           {sosMenu && (
             <div className="emergency-popover">
-              <button onClick={() => window.open('tel:112')} className="pop-btn bg-red-600"><Phone size={20}/> 112 SOS</button>
-              <button onClick={() => window.open('tel:062')} className="pop-btn bg-blue-800"><ShieldAlert size={20}/> 062 GC</button>
+              <a href="tel:112" className="sos-call-btn bg-emergencia"><Phone size={24}/> 112 EMERGENCIA</a>
+              <a href="tel:062" className="sos-call-btn bg-guardia"><ShieldAlert size={24}/> 062 GUARDIA CIVIL</a>
             </div>
           )}
           <button onClick={() => setSosMenu(!sosMenu)} className="btn-ui btn-sos">
@@ -206,7 +207,7 @@ export default function App() {
           </button>
         </div>
 
-        <button onClick={() => window.open(`https://wa.me/?text=Reporte: Etapa ${activeStage.id}. Restan ${distanceToTarget.toFixed(2)} km.`)} className="btn-ui btn-wa">
+        <button onClick={() => window.open(`https://wa.me/?text=Reporte: Etapa ${activeStage.id}. KM: ${distanceToTarget.toFixed(2)}`)} className="btn-ui btn-wa">
           <MessageCircle size={30}/><span className="font-black text-[9px]">REPORT</span>
         </button>
 
