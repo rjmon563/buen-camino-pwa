@@ -4,8 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   MessageCircle, Crosshair, RotateCcw, ShieldCheck, 
-  Eye, EyeOff, AlertTriangle, Phone, ShieldAlert,
-  Zap
+  Eye, EyeOff, AlertTriangle, Phone, ShieldAlert
 } from 'lucide-react';
 
 /* ===================== CONFIG & STYLES ===================== */
@@ -85,15 +84,25 @@ const STAGES = [
 function MapController({ userPos, tracking, target }) {
   const map = useMap();
   useEffect(() => {
-    if (tracking && userPos) map.setView(userPos, 17, { animate:true });
-    else if (target) map.flyTo(target, 14, { duration:1.5 });
-  }, [userPos, tracking, target, map]);
+    // Si el seguimiento está activo y tenemos posición, centrar mapa constantemente
+    if (tracking && userPos) {
+      map.setView(userPos, map.getZoom(), { animate: true });
+    }
+  }, [userPos, tracking, map]);
+
+  useEffect(() => {
+    // Si cambiamos de etapa y no estamos en seguimiento, volar al destino
+    if (!tracking && target) {
+      map.flyTo(target, 14, { duration: 1.5 });
+    }
+  }, [target, tracking, map]);
+
   return null;
 }
 
 export default function App() {
-  const [activeStage, setActiveStage] = useState(() => JSON.parse(localStorage.getItem('stage_v44')) || STAGES[0]);
-  const [steps, setSteps] = useState(() => parseInt(localStorage.getItem('steps_v44')) || 0);
+  const [activeStage, setActiveStage] = useState(() => JSON.parse(localStorage.getItem('stage_v45')) || STAGES[0]);
+  const [steps, setSteps] = useState(() => parseInt(localStorage.getItem('steps_v45')) || 0);
   const [userPos, setUserPos] = useState(null);
   const [isTracking, setIsTracking] = useState(false);
   const [batterySave, setBatterySave] = useState(false);
@@ -101,25 +110,21 @@ export default function App() {
   const [sosMenu, setSosMenu] = useState(false);
   const lastStepTime = useRef(0);
 
-  // EFECTO: GUARDADO AUTOMÁTICO
   useEffect(() => {
-    localStorage.setItem('steps_v44', steps);
-    localStorage.setItem('stage_v44', JSON.stringify(activeStage));
+    localStorage.setItem('steps_v45', steps);
+    localStorage.setItem('stage_v45', JSON.stringify(activeStage));
   }, [steps, activeStage]);
 
-  // EFECTO: SENSORES (GPS + ACELERÓMETRO)
   useEffect(() => {
     const style = document.createElement('style');
     style.innerHTML = STYLES;
     document.head.appendChild(style);
 
-    // GPS
     const watchId = navigator.geolocation.watchPosition(
       p => setUserPos([p.coords.latitude, p.coords.longitude]),
       null, { enableHighAccuracy: !batterySave }
     );
 
-    // CUENTAPASOS (SOLO MÓVIL)
     const handleMotion = (e) => {
       const acc = e.accelerationIncludingGravity;
       if (!acc) return;
@@ -131,17 +136,13 @@ export default function App() {
       }
     };
 
-    if (window.DeviceMotionEvent) {
-      window.addEventListener('devicemotion', handleMotion);
-    }
-
+    if (window.DeviceMotionEvent) window.addEventListener('devicemotion', handleMotion);
     return () => {
       navigator.geolocation.clearWatch(watchId);
       window.removeEventListener('devicemotion', handleMotion);
     };
   }, [batterySave]);
 
-  // CÁLCULO DE DISTANCIA
   const distanceToTarget = useMemo(() => {
     if (!userPos) return 0;
     const R = 6371;
@@ -156,13 +157,15 @@ export default function App() {
       {showOverlay && (
         <div className="sensor-overlay">
           <ShieldCheck size={80} className="text-cyan-500 mb-6 animate-pulse"/>
-          <button onClick={() => setShowOverlay(false)} className="px-12 py-5 bg-cyan-500 text-black font-black rounded-2xl uppercase">Entrar a Consola v44</button>
+          <button onClick={() => setShowOverlay(false)} className="px-12 py-5 bg-cyan-500 text-black font-black rounded-2xl uppercase">Entrar a Consola v45</button>
         </div>
       )}
 
-      {/* INTERFAZ SUPERIOR */}
       <div className="selector-container">
-        <select value={activeStage.id} onChange={(e) => setActiveStage(STAGES.find(x => x.id === parseInt(e.target.value)))}>
+        <select value={activeStage.id} onChange={(e) => {
+          setActiveStage(STAGES.find(x => x.id === parseInt(e.target.value)));
+          setIsTracking(false); // Al cambiar etapa, desactivamos tracking para ver destino
+        }}>
           {STAGES.map(s => <option key={s.id} value={s.id}>{s.id}. {s.name}</option>)}
         </select>
       </div>
@@ -173,7 +176,6 @@ export default function App() {
         <div className="text-sm font-bold text-white mt-1">{userPos ? distanceToTarget.toFixed(2) : "0.00"} KM</div>
       </div>
 
-      {/* MAPA CENTRAL */}
       <MapContainer center={activeStage.coords} zoom={14} zoomControl={false} style={{ flex: 1 }}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
         <Polyline positions={STAGES.map(s => s.coords)} pathOptions={{ color: '#00e5ff', weight: 4 }}/>
@@ -181,14 +183,13 @@ export default function App() {
         <MapController userPos={userPos} tracking={isTracking} target={activeStage.coords}/>
       </MapContainer>
 
-      {/* CONSOLA INFERIOR CROMÁTICA */}
       <div className="bottom-console">
         <div className="relative">
           {sosMenu && (
             <div className="emergency-popover">
-              <button onClick={() => window.open('tel:112')} className="p-4 bg-red-600 text-white rounded-xl border-2 border-white flex items-center gap-3 font-bold shadow-lg"><Phone size={20}/> 112 EMERGENCIA</button>
-              <button onClick={() => window.open('tel:062')} className="p-4 bg-blue-900 text-white rounded-xl border-2 border-white flex items-center gap-3 font-bold shadow-lg"><ShieldAlert size={20}/> 062 G. CIVIL</button>
-              <button onClick={() => window.open(`https://wa.me/?text=🚨SOS! Posicion: http://maps.google.com/?q=${userPos?.[0]},${userPos?.[1]}`)} className="p-4 bg-green-600 text-white rounded-xl border-2 border-white flex items-center gap-3 font-bold shadow-lg"><MessageCircle size={20}/> WHATSAPP SOS</button>
+              <button onClick={() => window.open('tel:112')} className="p-4 bg-red-600 text-white rounded-xl border-2 border-white flex items-center gap-3 font-bold"><Phone size={20}/> 112</button>
+              <button onClick={() => window.open('tel:062')} className="p-4 bg-blue-900 text-white rounded-xl border-2 border-white flex items-center gap-3 font-bold"><ShieldAlert size={20}/> 062 G. CIVIL</button>
+              <button onClick={() => window.open(`https://wa.me/?text=🚨SOS! Posicion: http://maps.google.com/?q=${userPos?.[0]},${userPos?.[1]}`)} className="p-4 bg-green-600 text-white rounded-xl border-2 border-white flex items-center gap-3 font-bold"><MessageCircle size={20}/> WA SOS</button>
             </div>
           )}
           <button onClick={() => setSosMenu(!sosMenu)} className="btn-ui btn-sos animate-pulse">
@@ -202,6 +203,7 @@ export default function App() {
           <span className="font-black text-[9px]">WHATSAPP</span>
         </button>
 
+        {/* MIRA: AHORA CON SALTO INMEDIATO AL ACTIVAR */}
         <button onClick={() => setIsTracking(!isTracking)} className={`btn-ui btn-mira ${isTracking ? 'scale-110 shadow-lg shadow-yellow-500/50' : 'opacity-80'}`}>
           <Crosshair size={32}/>
         </button>
