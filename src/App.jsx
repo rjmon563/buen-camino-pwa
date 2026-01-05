@@ -11,27 +11,42 @@ import {
 const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
   :root { --yellow: #facc15; --red: #ff0000; --green: #22c55e; --black: #000; --gray: #1a1a1a; --cyan: #00e5ff; }
+  
   body, html, #root { margin: 0; padding: 0; height: 100vh; width: 100vw; background: var(--black) !important; font-family: 'JetBrains Mono', monospace; color: white; overflow: hidden; }
+  
   .sidebar-tactical { width: 45%; background: var(--black); border-right: 2px solid var(--gray); display: flex; flex-direction: column; height: 100%; }
+  
   .pedometer-dashboard { background: linear-gradient(180deg, #111 0%, #000 100%); padding: 15px; border-bottom: 2px solid var(--yellow); display: flex; justify-content: space-between; align-items: center; }
+  
   .stage-list-container { flex: 1; overflow-y: auto; padding-bottom: 20px; }
   .stage-card { border-left: 4px solid #333; background: #0a0a0a; border-bottom: 1px solid #222; padding: 12px; cursor: pointer; }
   .stage-card.active { border-left: 4px solid var(--yellow); background: #111; }
+  
   .leaflet-container { background: #000 !important; filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(120%); height: 100%; width: 100%; }
-  .sniper-scope-marker { position: relative; width: 60px; height: 60px; display: flex; justify-content: center; align-items: center; }
+
+  /* RESTAURADA: MIRA TELESCÓPICA (SNIPER SCOPE) */
+  .sniper-scope-marker { position: relative; width: 60px; height: 60px; display: flex; justify-content: center; align-items: center; pointer-events: none; }
   .scope-cross-h { position: absolute; width: 100%; height: 2px; background: var(--red); box-shadow: 0 0 10px var(--red); }
   .scope-cross-v { position: absolute; width: 2px; height: 100%; background: var(--red); box-shadow: 0 0 10px var(--red); }
-  .scope-circle { position: absolute; width: 30px; height: 30px; border: 2px solid var(--red); border-radius: 50%; }
-  .scope-pulse { position: absolute; width: 30px; height: 30px; border: 2px solid var(--red); border-radius: 50%; animation: pulse 2s infinite; }
-  @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+  .scope-circle { position: absolute; width: 30px; height: 30px; border: 2px solid var(--red); border-radius: 50%; box-shadow: inset 0 0 5px var(--red); }
+  .scope-pulse { position: absolute; width: 30px; height: 30px; border: 2px solid var(--red); border-radius: 50%; animation: scopePulse 2s infinite; }
+  
+  @keyframes scopePulse {
+    0% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(2.5); opacity: 0; }
+  }
+
   .floating-controls { position: absolute; bottom: 20px; right: 20px; z-index: 5000; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
   .btn-tactical { width: 55px; height: 55px; border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(0,0,0,0.8); cursor: pointer; border: none; transition: transform 0.2s; }
+  
   .btn-sos-red-circle { width: 65px; height: 65px; border-radius: 50%; background: var(--red); color: white; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; border: 4px solid rgba(255,255,255,0.2); box-shadow: 0 0 25px var(--red); cursor: pointer; }
+  
   .btn-emergency-pill { background: #22c55e; color: white; padding: 12px 20px; border-radius: 40px; font-size: 11px; font-weight: 900; display: flex; align-items: center; gap: 8px; box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); border: none; cursor: pointer; text-align: left; }
+  
   .btn-gps-wa { background: #25D366; color: black; padding: 10px 15px; border-radius: 30px; font-size: 10px; font-weight: 900; display: flex; align-items: center; gap: 8px; box-shadow: 0 0 15px rgba(37, 211, 102, 0.4); border: none; cursor: pointer; }
+  
   .distance-tag { background: rgba(37, 99, 235, 0.2); border: 1px solid #2563eb; color: #60a5fa; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; margin-top: 5px; display: inline-flex; align-items: center; gap: 5px; }
   
-  /* OVERLAY PARA ACTIVAR SENSORES */
   .sensor-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; text-align: center; }
   .btn-sensor-start { background: var(--yellow); color: black; padding: 20px 40px; border-radius: 12px; font-weight: 900; border: none; font-size: 16px; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 0 30px rgba(250, 204, 21, 0.4); }
 `;
@@ -156,7 +171,7 @@ export default function App() {
         <div className="flex items-center gap-2">
           <Zap className="text-yellow-500" size={24} fill="currentColor" />
           <div>
-            <h1 className="text-yellow-500 font-black text-xs m-0 uppercase italic">Santiago Tactical v21.0</h1>
+            <h1 className="text-yellow-500 font-black text-xs m-0 uppercase italic">Santiago Tactical v22.0</h1>
             <p className="text-[8px] text-white/40 m-0 font-bold uppercase tracking-widest">Active System</p>
           </div>
         </div>
@@ -211,7 +226,7 @@ export default function App() {
         <main className="flex-1 relative bg-black">
           <div className="floating-controls">
             <button onClick={() => {
-              const msg = `SOS GPS: http://maps.google.com/maps?q=${userPos[0]},${userPos[1]}`;
+              const msg = `SOS GPS: http://googleusercontent.com/maps.google.com/5{userPos[0]},${userPos[1]}`;
               window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`);
             }} className="btn-gps-wa">
               <MessageCircle size={16} fill="black" /> ENVIAR GPS
@@ -232,10 +247,19 @@ export default function App() {
           <MapContainer center={activeStage.coords} zoom={13} zoomControl={false} style={{height: "100%", width: "100%"}}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             <Polyline positions={STAGES.map(s => s.coords)} color="#00e5ff" weight={4} opacity={0.8} />
+            
             {userPos && (
               <Marker position={userPos} icon={new L.DivIcon({
-                html: `<div class="sniper-scope-marker"><div class="scope-cross-h"></div><div class="scope-cross-v"></div><div class="scope-circle"></div><div class="scope-pulse"></div></div>`,
-                className: 'user-sniper', iconSize: [60, 60], iconAnchor: [30, 30]
+                html: `
+                  <div class="sniper-scope-marker">
+                    <div class="scope-cross-h"></div>
+                    <div class="scope-cross-v"></div>
+                    <div class="scope-circle"></div>
+                    <div class="scope-pulse"></div>
+                  </div>`,
+                className: 'user-sniper', 
+                iconSize: [60, 60], 
+                iconAnchor: [30, 30]
               })} />
             )}
             <MapController targetCoords={activeStage.coords} userPos={userPos} tracking={isTracking} />
