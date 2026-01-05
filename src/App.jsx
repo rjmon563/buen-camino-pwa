@@ -1,256 +1,214 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, ZoomControl } from 'react-leaflet';
+import React, { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { 
-  Map as MapIcon, BookOpen, Stamp, Navigation, ChevronRight, 
-  CheckCircle2, Crosshair, CloudRain, ShieldAlert, 
-  TrendingUp, MessageCircle, Footprints, WifiOff, Calendar, Sun
+  Target, MessageCircle, Activity, Zap, Wind, 
+  Thermometer, Droplets, Footprints, Navigation2 
 } from 'lucide-react';
 
-// --- CONFIGURACIÓN DE ICONOS ---
-const createCustomIcon = (color) => new L.DivIcon({
-  html: `<div style="background-color: ${color}; width: 14px; height: 14px; border: 2px solid white; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-  className: 'custom-marker-icon', iconSize: [14, 14], iconAnchor: [7, 7]
+// --- ESTILOS TÁCTICOS REVISADOS ---
+const injectTacticalStyles = () => {
+  if (typeof document !== 'undefined') {
+    const styleTag = document.createElement('style');
+    styleTag.innerHTML = `
+      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
+      :root { --tactical-yellow: #facc15; }
+      body { margin: 0; font-family: 'JetBrains Mono', monospace; background: #020617; color: white; overflow: hidden; }
+      .leaflet-container { height: 100% !important; width: 100% !important; background: #0b1120 !important; }
+      
+      /* MIRA TELESCÓPICA: PEQUEÑA Y ABAJO A LA DERECHA */
+      .sniper-btn { 
+        position: absolute; bottom: 20px; right: 20px; z-index: 2000;
+        width: 50px; height: 50px; border-radius: 50%; border: 3px solid #000;
+        display: flex; justify-content: center; align-items: center; transition: all 0.2s;
+      }
+      .sniper-scope-ui { position: relative; width: 35px; height: 35px; display: flex; justify-content: center; align-items: center; }
+      .scope-center { width: 4px; height: 4px; background: #ff0000; border-radius: 50%; z-index: 10; box-shadow: 0 0 8px #ff0000; }
+      .scope-pulse { position: absolute; width: 20px; height: 20px; border: 1.5px solid #ff0000; border-radius: 50%; animation: pulse-gps 1.5s infinite; }
+      .scope-cross-h { position: absolute; width: 35px; height: 1px; background: rgba(255, 0, 0, 0.5); }
+      .scope-cross-v { position: absolute; width: 1px; height: 35px; background: rgba(255, 0, 0, 0.5); }
+      @keyframes pulse-gps { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+      
+      .glass-panel { background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(6px); border: 1px solid rgba(250, 204, 21, 0.2); }
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-thumb { background: #facc15; }
+    `;
+    document.head.appendChild(styleTag);
+  }
+};
+injectTacticalStyles();
+
+// --- ICONO DE USUARIO ---
+const userSniperIcon = new L.DivIcon({
+  html: `<div class="sniper-scope-ui"><div class="scope-cross-h"></div><div class="scope-cross-v"></div><div class="scope-center"></div><div class="scope-pulse"></div></div>`,
+  className: 'user-icon', iconSize: [35, 35], iconAnchor: [17, 17]
 });
 
-const userIcon = new L.DivIcon({
-  html: `<div class="gps-pulse"></div><style>
-    .gps-pulse { width: 18px; height: 18px; background: #3b82f6; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(59, 130, 246, 0.8); animation: pulse-gps 2s infinite; }
-    @keyframes pulse-gps { 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); } 70% { box-shadow: 0 0 0 12px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
-  </style>`,
-  className: 'user-icon', iconSize: [18, 18], iconAnchor: [9, 9]
-});
-
-// --- BASE DE DATOS COMPLETA CON DESNIVELES ---
-const stages = [
-  { id: 1, name: "SJ Pied de Port - Roncesvalles", coords: [43.1635, -1.2358], dist: "24.2 km", up: "+1250m", down: "-450m", temp: "14°C" },
-  { id: 2, name: "Roncesvalles - Zubiri", coords: [42.9886, -1.3201], dist: "21.4 km", up: "+250m", down: "-800m", temp: "16°C" },
-  { id: 3, name: "Zubiri - Pamplona", coords: [42.8125, -1.6458], dist: "20.4 km", up: "+350m", down: "-400m", temp: "19°C" },
-  { id: 4, name: "Pamplona - Puente la Reina", coords: [42.6719, -1.8136], dist: "23.9 km", up: "+450m", down: "-500m", temp: "21°C" },
-  { id: 5, name: "Puente la Reina - Estella", coords: [42.6711, -2.0311], dist: "21.6 km", up: "+300m", down: "-250m", temp: "22°C" },
-  { id: 6, name: "Estella - Los Arcos", coords: [42.5667, -2.1917], dist: "21.3 km", up: "+250m", down: "-300m", temp: "23°C" },
-  { id: 7, name: "Los Arcos - Logroño", coords: [42.4667, -2.4500], dist: "27.6 km", up: "+200m", down: "-250m", temp: "24°C" },
-  { id: 8, name: "Logroño - Nájera", coords: [42.4167, -2.7333], dist: "29.0 km", up: "+350m", down: "-200m", temp: "22°C" },
-  { id: 9, name: "Nájera - Sto. Domingo", coords: [42.4414, -2.9531], dist: "21.0 km", up: "+250m", down: "-150m", temp: "20°C" },
-  { id: 10, name: "Sto. Domingo - Belorado", coords: [42.4201, -3.1903], dist: "22.0 km", up: "+150m", down: "-100m", temp: "19°C" },
-  { id: 11, name: "Belorado - Agés", coords: [42.3744, -3.4511], dist: "27.4 km", up: "+400m", down: "-150m", temp: "18°C" },
-  { id: 12, name: "Agés - Burgos", coords: [42.3439, -3.6969], dist: "23.0 km", up: "+100m", down: "-250m", temp: "17°C" },
-  { id: 13, name: "Burgos - Hontanas", coords: [42.3122, -3.9458], dist: "31.1 km", up: "+150m", down: "-150m", temp: "22°C" },
-  { id: 14, name: "Hontanas - Frómista", coords: [42.2667, -4.4061], dist: "34.5 km", up: "+100m", down: "-150m", temp: "25°C" },
-  { id: 15, name: "Frómista - Carrión", coords: [42.3389, -4.6031], dist: "18.8 km", up: "+50m", down: "-50m", temp: "26°C" },
-  { id: 16, name: "Carrión - Terradillos", coords: [42.3644, -4.9211], dist: "26.3 km", up: "+100m", down: "-50m", temp: "24°C" },
-  { id: 17, name: "Terradillos - Sahagún", coords: [42.3714, -5.0311], dist: "13.9 km", up: "+50m", down: "-100m", temp: "23°C" },
-  { id: 18, name: "Sahagún - Burgo Ranero", coords: [42.4222, -5.2211], dist: "17.6 km", up: "+50m", down: "-50m", temp: "22°C" },
-  { id: 19, name: "Burgo Ranero - Mansilla", coords: [42.5000, -5.4167], dist: "18.8 km", up: "+50m", down: "-100m", temp: "21°C" },
-  { id: 20, name: "Mansilla - León", coords: [42.5989, -5.5669], dist: "18.5 km", up: "+100m", down: "-100m", temp: "20°C" },
-  { id: 21, name: "León - San Martín", coords: [42.5611, -5.8111], dist: "24.6 km", up: "+100m", down: "-100m", temp: "19°C" },
-  { id: 22, name: "San Martín - Astorga", coords: [42.4589, -6.0561], dist: "23.7 km", up: "+200m", down: "-150m", temp: "18°C" },
-  { id: 23, name: "Astorga - Foncebadón", coords: [42.4439, -6.3411], dist: "25.8 km", up: "+600m", down: "-100m", temp: "15°C" },
-  { id: 24, name: "Foncebadón - Ponferrada", coords: [42.5467, -6.5961], dist: "26.8 km", up: "+150m", down: "-950m", temp: "18°C" },
-  { id: 25, name: "Ponferrada - Villafranca", coords: [42.6072, -6.8111], dist: "24.2 km", up: "+200m", down: "-150m", temp: "20°C" },
-  { id: 26, name: "Villafranca - O Cebreiro", coords: [42.7011, -7.0411], dist: "27.8 km", up: "+1000m", down: "-150m", temp: "12°C" },
-  { id: 27, name: "O Cebreiro - Triacastela", coords: [42.7567, -7.2411], dist: "20.8 km", up: "+150m", down: "-750m", temp: "14°C" },
-  { id: 28, name: "Triacastela - Sarria", coords: [42.7769, -7.4167], dist: "18.4 km", up: "+300m", down: "-450m", temp: "16°C" },
-  { id: 29, name: "Sarria - Portomarín", coords: [42.8075, -7.6161], dist: "22.2 km", up: "+350m", down: "-400m", temp: "17°C" },
-  { id: 30, name: "Portomarín - Palas de Rei", coords: [42.8733, -7.8686], dist: "24.8 km", up: "+450m", down: "-350m", temp: "18°C" },
-  { id: 31, name: "Palas de Rei - Arzúa", coords: [42.9269, -8.1639], dist: "28.5 km", up: "+400m", down: "-500m", temp: "19°C" },
-  { id: 32, name: "Arzúa - O Pedrouzo", coords: [42.9111, -8.3611], dist: "19.3 km", up: "+150m", down: "-200m", temp: "18°C" },
-  { id: 33, name: "O Pedrouzo - Santiago", coords: [42.8806, -8.5444], dist: "19.4 km", up: "+150m", down: "-200m", temp: "17°C" },
-  { id: 34, name: "Santiago de Compostela", coords: [42.8806, -8.5464], dist: "Meta", up: "0m", down: "0m", temp: "16°C" }
+// --- LAS 33 ETAPAS COMPLETAS (Camino Francés) ---
+const STAGES = [
+  { id: 1, name: "SJ Pied de Port - Roncesvalles", dist: "24.2 km", coords: [43.0125, -1.3148] },
+  { id: 2, name: "Roncesvalles - Zubiri", dist: "21.4 km", coords: [42.9298, -1.5042] },
+  { id: 3, name: "Zubiri - Pamplona", dist: "20.4 km", coords: [42.8125, -1.6458] },
+  { id: 4, name: "Pamplona - Puente la Reina", dist: "24.0 km", coords: [42.6719, -1.8139] },
+  { id: 5, name: "Puente la Reina - Estella", dist: "22.0 km", coords: [42.6715, -2.0315] },
+  { id: 6, name: "Estella - Los Arcos", dist: "21.0 km", coords: [42.5684, -2.1917] },
+  { id: 7, name: "Los Arcos - Logroño", dist: "28.0 km", coords: [42.4627, -2.4450] },
+  { id: 8, name: "Logroño - Nájera", dist: "29.0 km", coords: [42.4162, -2.7303] },
+  { id: 9, name: "Nájera - Sto. Domingo", dist: "21.0 km", coords: [42.4411, -2.9535] },
+  { id: 10, name: "Sto. Domingo - Belorado", dist: "22.0 km", coords: [42.4194, -3.1904] },
+  { id: 11, name: "Belorado - Agés", dist: "27.0 km", coords: [42.3664, -3.4503] },
+  { id: 12, name: "Agés - Burgos", dist: "23.0 km", coords: [42.3440, -3.6969] },
+  { id: 13, name: "Burgos - Hontanas", dist: "31.1 km", coords: [42.3120, -4.0450] },
+  { id: 14, name: "Hontanas - Frómista", dist: "34.5 km", coords: [42.2668, -4.4061] },
+  { id: 15, name: "Frómista - Carrión", dist: "19.3 km", coords: [42.3389, -4.6067] },
+  { id: 16, name: "Carrión - Terradillos", dist: "26.3 km", coords: [42.3610, -4.9248] },
+  { id: 17, name: "Terradillos - Sahagún", dist: "13.9 km", coords: [42.3719, -5.0315] },
+  { id: 18, name: "Sahagún - Burgo Ranero", dist: "18.0 km", coords: [42.4230, -5.2215] },
+  { id: 19, name: "Burgo Ranero - León", dist: "37.1 km", coords: [42.5987, -5.5671] },
+  { id: 20, name: "León - San Martín", dist: "25.9 km", coords: [42.5200, -5.8100] },
+  { id: 21, name: "San Martín - Astorga", dist: "24.2 km", coords: [42.4544, -6.0560] },
+  { id: 22, name: "Astorga - Foncebadón", dist: "25.8 km", coords: [42.4385, -6.3450] },
+  { id: 23, name: "Foncebadón - Ponferrada", dist: "26.8 km", coords: [42.5455, -6.5936] },
+  { id: 24, name: "Ponferrada - Villafranca", dist: "24.2 km", coords: [42.6074, -6.8115] },
+  { id: 25, name: "Villafranca - O Cebreiro", dist: "27.8 km", coords: [42.7077, -7.0423] },
+  { id: 26, name: "O Cebreiro - Triacastela", dist: "20.8 km", coords: [42.7565, -7.2403] },
+  { id: 27, name: "Triacastela - Sarria", dist: "18.4 km", coords: [42.7770, -7.4160] },
+  { id: 28, name: "Sarria - Portomarín", dist: "22.2 km", coords: [42.8075, -7.6160] },
+  { id: 29, name: "Portomarín - Palas de Rei", dist: "24.8 km", coords: [42.8732, -7.8687] },
+  { id: 30, name: "Palas de Rei - Arzúa", dist: "28.5 km", coords: [42.9265, -8.1634] },
+  { id: 31, name: "Arzúa - O Pedrouzo", dist: "19.3 km", coords: [42.9100, -8.3600] },
+  { id: 32, name: "O Pedrouzo - Santiago", dist: "19.4 km", coords: [42.8870, -8.5100] },
+  { id: 33, name: "Santiago de Compostela", dist: "META", coords: [42.8806, -8.5464] }
 ];
 
-function MapController({ center, userPos, isTracking }) {
+function MapController({ coords, userPos, tracking }) {
   const map = useMap();
   useEffect(() => {
-    if (isTracking && userPos) map.flyTo(userPos, 16, { animate: true });
-    else if (center) map.flyTo(center, 14, { animate: true });
-  }, [center, userPos, isTracking, map]);
+    if (tracking && userPos) map.flyTo(userPos, 16);
+    else if (coords) map.flyTo(coords, 12);
+  }, [coords, userPos, tracking, map]);
   return null;
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('mapa');
-  const [currentStage, setCurrentStage] = useState(stages[0]);
+  const [activeStage, setActiveStage] = useState(STAGES[0]);
   const [userPos, setUserPos] = useState(null);
   const [isTracking, setIsTracking] = useState(false);
   const [steps, setSteps] = useState(0);
-  const [stamps, setStamps] = useState(() => JSON.parse(localStorage.getItem('caminostamps') || '[]'));
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [distanceWalked, setDistanceWalked] = useState(0);
+  const lastPosRef = useRef(null);
 
+  // GPS y Distancia
   useEffect(() => {
-    localStorage.setItem('caminostamps', JSON.stringify(stamps));
-  }, [stamps]);
-
-  useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
+    const watchId = navigator.geolocation.watchPosition((p) => {
+      const newPos = [p.coords.latitude, p.coords.longitude];
+      if (lastPosRef.current) {
+        const d = L.latLng(lastPosRef.current).distanceTo(L.latLng(newPos));
+        if (d > 2) setDistanceWalked(prev => prev + d);
+      }
+      lastPosRef.current = newPos;
+      setUserPos(newPos);
+    }, null, { enableHighAccuracy: true });
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
+  // Podómetro
   useEffect(() => {
-    let lastAccel = 0;
+    let lastMag = 0;
     const handleMotion = (e) => {
-      const accel = e.accelerationIncludingGravity;
-      if (!accel) return;
-      const total = Math.sqrt(accel.x**2 + accel.y**2 + accel.z**2);
-      if (total > 12 && (Date.now() - lastAccel > 300)) {
-        setSteps(prev => prev + 1);
-        lastAccel = Date.now();
-      }
+      const acc = e.accelerationIncludingGravity;
+      if (!acc) return;
+      const mag = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
+      if (Math.abs(mag - lastMag) > 3.8) setSteps(s => s + 1);
+      lastMag = mag;
     };
     window.addEventListener('devicemotion', handleMotion);
     return () => window.removeEventListener('devicemotion', handleMotion);
   }, []);
 
-  useEffect(() => {
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => setUserPos([pos.coords.latitude, pos.coords.longitude]),
-      (err) => console.log(err),
-      { enableHighAccuracy: true }
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
-
-  const sendWhatsApp = () => {
-    const msg = `SOS: Estoy en el Camino de Santiago. Mi ubicación: https://www.google.com/maps?q=${userPos ? userPos[0]+','+userPos[1] : currentStage.coords[0]+','+currentStage.coords[1]}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-  };
-
   return (
-    <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
+    <div className="flex flex-col h-screen w-screen bg-[#020617]">
       
-      {/* HEADER INTEGRADO */}
-      <header className="bg-blue-800 text-white p-4 shadow-lg z-50 flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <Navigation className="text-yellow-400 rotate-45" size={28} />
-          <div>
-            <h1 className="text-lg font-black leading-none tracking-tight flex items-center gap-2">
-              BUEN CAMINO {isOffline && <WifiOff size={14} className="text-red-400 animate-pulse" />}
-            </h1>
-            <p className="text-[10px] text-blue-200 font-bold uppercase mt-1 italic">
-              Etapa {currentStage.id} • {steps} PASOS
-            </p>
-          </div>
+      {/* BARRA SUPERIOR */}
+      <header className="h-12 bg-black border-b border-yellow-500 flex items-center justify-between px-4 z-[2000]">
+        <div className="flex items-center gap-2">
+          <Zap className="text-yellow-500" size={18} fill="currentColor" />
+          <span className="text-yellow-500 font-black text-xs uppercase italic">Camino Tactical v5.0</span>
         </div>
-        <div className="flex gap-2">
-            <div className="bg-blue-900/50 px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-2 border border-blue-700">
-                <CloudRain size={14} className="text-blue-300" /> {currentStage.temp}
-            </div>
-            <button onClick={() => window.location.href="tel:112"} className="bg-red-500 px-3 py-1 rounded-xl shadow-md font-black text-xs active:scale-95 transition-transform flex items-center gap-1 uppercase">
-                <ShieldAlert size={18} /> SOS
-            </button>
+        <div className="flex gap-4">
+          <div className="flex items-center gap-1 text-green-500 font-black text-[10px]"><Footprints size={14}/> {steps} STEPS</div>
+          <button onClick={() => window.location.href="tel:112"} className="bg-red-600 text-white text-[9px] font-black px-4 py-1 rounded-full">SOS 112</button>
         </div>
       </header>
 
-      <main className="flex-1 relative flex overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         
-        {/* NAV LATERAL */}
-        <nav className="w-16 bg-white border-r border-slate-200 flex flex-col items-center py-6 gap-6 z-40 shadow-xl">
-          <button onClick={() => setActiveTab('mapa')} className={`p-3 rounded-2xl transition-all ${activeTab === 'mapa' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400'}`}><MapIcon size={24} /></button>
-          <button onClick={() => setActiveTab('guia')} className={`p-3 rounded-2xl transition-all ${activeTab === 'guia' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400'}`}><TrendingUp size={24} /></button>
-          <button onClick={() => setActiveTab('sellos')} className={`p-3 rounded-2xl transition-all ${activeTab === 'sellos' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400'}`}><Stamp size={24} /></button>
-          <button onClick={sendWhatsApp} className="mt-auto p-3 bg-green-500 rounded-2xl text-white shadow-lg active:scale-90 transition-all"><MessageCircle size={24} /></button>
-        </nav>
-
-        <div className="flex-1 relative">
-          
-          {activeTab === 'mapa' && (
-            <>
-              {/* SELECTOR DE ETAPAS */}
-              <div className="absolute top-4 left-4 right-4 z-[1000] max-w-sm mx-auto">
-                <select 
-                  className="w-full p-4 bg-white/95 backdrop-blur shadow-2xl rounded-2xl border-2 border-blue-50 text-slate-700 font-bold text-sm outline-none"
-                  value={currentStage.id}
-                  onChange={(e) => {
-                    setCurrentStage(stages.find(s => s.id === parseInt(e.target.value)));
-                    setIsTracking(false);
-                  }}
-                >
-                  {stages.map(s => <option key={s.id} value={s.id}>Etapa {s.id}: {s.name}</option>)}
-                </select>
-              </div>
-
-              {/* BOTÓN FRANCOTIRADOR */}
-              <button 
-                onClick={() => setIsTracking(!isTracking)}
-                className={`absolute bottom-10 right-6 z-[1000] p-5 rounded-full shadow-2xl transition-all ${isTracking ? 'bg-blue-600 text-white animate-pulse border-white border-2' : 'bg-white text-slate-400'}`}
+        {/* PANEL IZQUIERDO: LAS 33 ETAPAS */}
+        <aside className="w-[42%] border-r border-slate-800 bg-[#0b1120] flex flex-col">
+          <div className="p-2 bg-slate-900 text-[8px] font-black text-slate-500 border-b border-slate-800 uppercase flex justify-between">
+            <span>Stage Log / Full Route</span>
+            <span className="text-yellow-500">33 FASES</span>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {STAGES.map((s) => (
+              <div 
+                key={s.id} 
+                onClick={() => setActiveStage(s)}
+                className={`p-3 border-b border-slate-800/40 cursor-pointer flex justify-between items-center ${activeStage.id === s.id ? 'bg-yellow-500/10 border-l-4 border-l-yellow-500' : ''}`}
               >
-                <Crosshair size={30} />
-              </button>
-
-              <MapContainer center={currentStage.coords} zoom={13} className="h-full w-full" zoomControl={false}>
-                <ZoomControl position="topright" />
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                <Polyline positions={stages.map(s => s.coords)} color="#2563eb" weight={5} opacity={0.4} />
-                {stages.map((s) => (
-                  <Marker key={s.id} position={s.coords} icon={createCustomIcon(s.id === currentStage.id ? '#f59e0b' : '#3b82f6')} />
-                ))}
-                {userPos && <Marker position={userPos} icon={userIcon} />}
-                <MapController center={currentStage.coords} userPos={userPos} isTracking={isTracking} />
-              </MapContainer>
-            </>
-          )}
-
-          {activeTab === 'guia' && (
-            <div className="h-full overflow-y-auto p-6 bg-slate-50 pb-24">
-              <h2 className="text-2xl font-black text-slate-800 mb-6 uppercase tracking-tight flex items-center gap-2">
-                <TrendingUp className="text-blue-600" /> Perfil Técnico
-              </h2>
-              <div className="grid gap-4">
-                {stages.map(s => (
-                  <div 
-                    key={s.id} 
-                    onClick={() => { setCurrentStage(s); setActiveTab('mapa'); setIsTracking(false); }}
-                    className={`p-5 rounded-3xl bg-white border-2 transition-all flex items-center justify-between ${s.id === currentStage.id ? 'border-blue-500 shadow-md' : 'border-transparent shadow-sm'}`}
-                  >
-                    <div className="flex items-center gap-5">
-                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm ${s.id === currentStage.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{s.id}</div>
-                      <div>
-                        <p className="font-bold text-slate-800 text-sm leading-tight">{s.name}</p>
-                        <div className="flex gap-3 mt-1">
-                            <span className="text-[10px] font-black text-blue-500 uppercase">{s.dist}</span>
-                            <span className="text-[10px] font-black text-green-600 uppercase flex items-center gap-1">{s.up} ↑</span>
-                            <span className="text-[10px] font-black text-red-500 uppercase flex items-center gap-1">{s.down} ↓</span>
-                        </div>
-                      </div>
-                    </div>
-                    <ChevronRight size={20} className="text-slate-300" />
-                  </div>
-                ))}
+                <div>
+                  <h4 className={`text-[10px] font-black uppercase ${activeStage.id === s.id ? 'text-yellow-400' : 'text-slate-200'}`}>{s.id}. {s.name}</h4>
+                  <p className="text-[9px] font-bold text-slate-500 tracking-tighter">DISTANCIA: {s.dist}</p>
+                </div>
+                <Activity size={12} className={activeStage.id === s.id ? 'text-yellow-500' : 'text-slate-700'} />
               </div>
+            ))}
+          </div>
+          
+          {/* PODÓMETRO Y DISTANCIA PANEL */}
+          <div className="p-3 bg-black border-t border-slate-800 grid grid-cols-2 gap-2">
+            <div className="glass-panel p-2 rounded-lg text-center">
+              <p className="text-[7px] text-slate-500 font-black uppercase">KM Hoy</p>
+              <p className="text-sm font-black text-yellow-500">{(distanceWalked / 1000).toFixed(2)}</p>
             </div>
-          )}
-
-          {activeTab === 'sellos' && (
-            <div className="h-full overflow-y-auto p-8 bg-white text-center">
-              <div className="bg-blue-50 rounded-[40px] p-10 border-2 border-dashed border-blue-200 mb-8 shadow-inner">
-                <Stamp size={60} className="mx-auto text-blue-600 mb-4" />
-                <h2 className="text-2xl font-black text-slate-800 mb-2">Credencial Digital</h2>
-                <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-8 italic">Funciona Offline</p>
-                <button 
-                  onClick={() => !stamps.includes(currentStage.id) && setStamps([...stamps, currentStage.id])}
-                  className="bg-blue-600 text-white px-10 py-4 rounded-2xl font-black shadow-xl active:scale-95 transition-all uppercase text-sm"
-                >
-                  Sellar Etapa {currentStage.id}
-                </button>
-              </div>
-              <div className="grid grid-cols-4 gap-3">
-                {stages.map(s => (
-                  <div key={s.id} className={`aspect-square rounded-2xl flex items-center justify-center text-xs font-black transition-all border-2 ${stamps.includes(s.id) ? 'bg-yellow-400 border-yellow-500 text-blue-900 shadow-lg' : 'bg-slate-50 border-slate-100 text-slate-300'}`}>
-                    {stamps.includes(s.id) ? <CheckCircle2 size={24} /> : s.id}
-                  </div>
-                ))}
-              </div>
+            <div className="glass-panel p-2 rounded-lg text-center">
+              <p className="text-[7px] text-slate-500 font-black uppercase">Pasos</p>
+              <p className="text-sm font-black text-white">{steps}</p>
             </div>
-          )}
-        </div>
-      </main>
+          </div>
+        </aside>
+
+        {/* MAPA OPERATIVO */}
+        <main className="flex-1 relative bg-slate-900">
+          
+          {/* MIRA TELESCÓPICA - CAMBIO DE POSICIÓN (ABAJO DERECHA) */}
+          <button 
+            onClick={() => setIsTracking(!isTracking)}
+            className={`sniper-btn ${isTracking ? 'bg-red-600' : 'bg-yellow-500'}`}
+          >
+            <div className="sniper-scope-ui">
+              <div className="scope-cross-h"></div>
+              <div className="scope-cross-v"></div>
+              <div className="scope-center"></div>
+              {isTracking && <div className="scope-pulse"></div>}
+            </div>
+          </button>
+
+          <MapContainer center={activeStage.coords} zoom={12} zoomControl={false}>
+            <TileLayer url="https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png" />
+            <Polyline positions={STAGES.map(s => s.coords)} color="#2563eb" weight={5} opacity={0.7} />
+            {STAGES.map(s => (
+              <Marker key={s.id} position={s.coords} icon={new L.DivIcon({
+                html: `<div style="width:8px; height:8px; background:${s.id === activeStage.id ? '#facc15' : '#334155'}; border:1px solid white; border-radius:50%;"></div>`,
+                className: 'dot', iconSize: [8, 8]
+              })} />
+            ))}
+            {userPos && <Marker position={userPos} icon={userSniperIcon} />}
+            <MapController coords={activeStage.coords} userPos={userPos} tracking={isTracking} />
+          </MapContainer>
+        </main>
+      </div>
     </div>
   );
 }

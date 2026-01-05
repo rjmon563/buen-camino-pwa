@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Configuración para permitir el acceso desde el móvil (Network)
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: true, // Esto hace que Vite escuche en todas las direcciones de red local
+    host: '0.0.0.0', // Esto permite que el móvil vea el ordenador
     port: 5173,
+    strictPort: true,
+    allowedHosts: 'all' // Esto elimina el error 3200 de Ngrok
   }
 })
