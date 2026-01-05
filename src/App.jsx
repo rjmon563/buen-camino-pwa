@@ -3,22 +3,21 @@ import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-  Zap, MessageCircle, Crosshair, Navigation, 
-  RotateCcw, ShieldCheck, Eye, EyeOff, TrendingUp,
-  AlertTriangle, List, MapPin, Coffee, Home, Stethoscope
+  MessageCircle, Crosshair, RotateCcw, ShieldCheck, 
+  Eye, EyeOff, AlertTriangle, Phone, ShieldAlert,
+  Zap, Navigation
 } from 'lucide-react';
 
-/* ===================== CONFIG ===================== */
-const AUTO_ADVANCE_KM = 0.3;
+/* ===================== CONFIG & STYLES ===================== */
 const STEP_THRESHOLD = 12.5;
 const STEP_DEBOUNCE_MS = 350;
 
-/* ===================== STYLES ===================== */
 const STYLES = `
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
-:root { --yellow:#facc15; --red:#ff0000; --black:#050505; --cyan:#00e5ff; }
+:root { --yellow:#facc15; --red:#ff0000; --black:#050505; --cyan:#00e5ff; --green:#22c55e; --blue:#2563eb; }
 html,body,#root{margin:0;height:100%;background:var(--black);font-family:'JetBrains Mono',monospace;color:white;overflow:hidden}
 .leaflet-container{background:#000;filter:invert(100%) hue-rotate(180deg) brightness(95%) contrast(120%); z-index:1}
+
 .sniper-scope-marker{position:relative;width:80px;height:80px;display:flex;align-items:center;justify-content:center}
 .scope-cross-h,.scope-cross-v{position:absolute;background:red;box-shadow:0 0 8px red}
 .scope-cross-h{width:100%;height:1px}
@@ -26,14 +25,22 @@ html,body,#root{margin:0;height:100%;background:var(--black);font-family:'JetBra
 .scope-circle{width:40px;height:40px;border:1px solid red;border-radius:50%}
 .scope-pulse{position:absolute;width:40px;height:40px;border:2px solid red;border-radius:50%;animation:pulse 2s infinite}
 @keyframes pulse{to{transform:scale(3);opacity:0}}
-.tactical-stats{position:fixed; top:90px; left:20px; z-index:1000; background:rgba(0,0,0,0.85); border:1px solid var(--yellow); padding:12px; border-radius:8px; min-width:180px; pointer-events:none; backdrop-filter:blur(5px)}
-.sensor-overlay{position:fixed;inset:0;background:black;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center}
-select { background: #111; color: var(--yellow); border: 1px solid var(--yellow); padding: 8px; font-family: 'JetBrains Mono'; border-radius: 4px; width: 100%; margin-top: 5px; font-size: 12px; }
-.emergency-btn { background: #ff0000; animation: pulse-red 1.5s infinite; border: 2px solid white; }
-@keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(255,0,0,0.7); } 70% { box-shadow: 0 0 0 15px rgba(255,0,0,0); } 100% { box-shadow: 0 0 0 0 rgba(255,0,0,0); } }
+
+.tactical-stats{position:fixed; top:20px; left:20px; z-index:1000; background:rgba(0,0,0,0.9); border:1px solid var(--cyan); padding:10px; border-radius:8px; min-width:160px; pointer-events:none; backdrop-filter:blur(5px)}
+select { background: #111; color: var(--yellow); border: 1px solid var(--yellow); padding: 8px; font-family: 'JetBrains Mono'; border-radius: 4px; width: 100%; font-size: 11px; }
+
+/* CONSOLA INFERIOR */
+.bottom-console { position: fixed; bottom: 0; left: 0; right: 0; background: #0a0a0a; border-top: 2px solid var(--cyan); display: flex; justify-content: space-around; align-items: center; padding: 12px 10px 20px 10px; z-index: 2000; }
+
+/* MENÚ SOS DESPLEGABLE */
+.emergency-popover { position: absolute; bottom: 85px; left: 10px; display: flex; flex-direction: column; gap: 8px; width: 240px; animation: slideUp 0.2s ease-out; }
+.btn-emergency { background: var(--red); color: white; padding: 15px; border-radius: 12px; display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 12px; border: 2px solid white; box-shadow: 0 4px 15px rgba(255,0,0,0.4); }
+.btn-whatsapp { background: var(--green); color: black; padding: 15px; border-radius: 12px; display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 12px; border: 2px solid black; }
+
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 `;
 
-/* ===================== FULL DATA: ALL 33 STAGES ===================== */
+/* ===================== DATA: ALL 33 STAGES ===================== */
 const STAGES = [
   { id:1, name:"St-Jean - Roncesvalles", gain:"+1250m", diff:"ALTA", coords:[43.0125,-1.3148] },
   { id:2, name:"Roncesvalles - Zubiri", gain:"+400m", diff:"MEDIA", coords:[42.9298,-1.5042] },
@@ -70,7 +77,6 @@ const STAGES = [
   { id:33, name:"Santiago de Compostela", gain:"0m", diff:"META", coords:[42.8806,-8.5464] }
 ];
 
-/* ===================== COMPONENTS ===================== */
 function MapController({ userPos, tracking, target }) {
   const map = useMap();
   useEffect(() => {
@@ -81,57 +87,31 @@ function MapController({ userPos, tracking, target }) {
 }
 
 export default function App() {
-  // Restore State
-  const [activeStage, setActiveStage] = useState(() => JSON.parse(localStorage.getItem('stage_v35')) || STAGES[0]);
-  const [steps, setSteps] = useState(() => parseInt(localStorage.getItem('steps_v35')) || 0);
-  const [stageStartSteps, setStageStartSteps] = useState(() => parseInt(localStorage.getItem('stage_start_v35')) || 0);
-  const [userPos, setUserPos] = useState(() => JSON.parse(localStorage.getItem('last_pos_v35')) || null);
+  const [activeStage, setActiveStage] = useState(() => JSON.parse(localStorage.getItem('stage_v40')) || STAGES[0]);
+  const [steps, setSteps] = useState(() => parseInt(localStorage.getItem('steps_v40')) || 0);
+  const [userPos, setUserPos] = useState(() => JSON.parse(localStorage.getItem('last_pos_v40')) || null);
   const [isTracking, setIsTracking] = useState(false);
   const [batterySave, setBatterySave] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
+  const [sosMenu, setSosMenu] = useState(false);
 
-  const lastAcc = useRef(0);
-  const debounce = useRef(false);
-
-  // Sync Persistence
   useEffect(() => {
-    localStorage.setItem('steps_v35', steps);
-    localStorage.setItem('stage_v35', JSON.stringify(activeStage));
-    localStorage.setItem('stage_start_v35', stageStartSteps);
-    if(userPos) localStorage.setItem('last_pos_v35', JSON.stringify(userPos));
-  }, [steps, activeStage, stageStartSteps, userPos]);
+    localStorage.setItem('steps_v40', steps);
+    localStorage.setItem('stage_v40', JSON.stringify(activeStage));
+    if(userPos) localStorage.setItem('last_pos_v40', JSON.stringify(userPos));
+  }, [steps, activeStage, userPos]);
 
-  // GPS Watcher
   useEffect(() => {
     const style = document.createElement('style');
     style.innerHTML = STYLES;
     document.head.appendChild(style);
-
     const watchId = navigator.geolocation.watchPosition(
-      p => {
-        const pos = [p.coords.latitude, p.coords.longitude];
-        setUserPos(pos);
-      },
-      null, 
-      { enableHighAccuracy: !batterySave, maximumAge: 5000 }
+      p => setUserPos([p.coords.latitude, p.coords.longitude]),
+      null, { enableHighAccuracy: !batterySave }
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, [batterySave]);
 
-  // Motion logic
-  const handleMotion = useCallback(e => {
-    const a = e.accelerationIncludingGravity;
-    if (!a) return;
-    const v = Math.sqrt(a.x*a.x + a.y*a.y + a.z*a.z);
-    if (Math.abs(v - lastAcc.current) > STEP_THRESHOLD && !debounce.current) {
-      setSteps(s => s + 1);
-      debounce.current = true;
-      setTimeout(() => debounce.current = false, STEP_DEBOUNCE_MS);
-    }
-    lastAcc.current = v;
-  }, []);
-
-  // Distance Logic
   const distanceToTarget = useMemo(() => {
     if (!userPos) return null;
     const R = 6371;
@@ -141,101 +121,82 @@ export default function App() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   }, [userPos, activeStage]);
 
-  // SOS Function
-  const handleSOS = () => {
-    const loc = userPos ? `${userPos[0]},${userPos[1]}` : "GPS_LOST";
-    const msg = `🚨 SOS - EMERGENCIA CAMINO 🚨\nMi posición actual: http://maps.google.com/?q=${loc}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`);
-  };
-
-  const resetSteps = () => {
-    if (confirm("¿Reiniciar contador total?")) {
-      setSteps(0);
-      setStageStartSteps(0);
-    }
-  };
-
   return (
     <div className="h-screen w-screen bg-black overflow-hidden flex flex-col">
       {showOverlay && (
         <div className="sensor-overlay">
           <ShieldCheck size={80} className="text-yellow-500 mb-6 animate-pulse"/>
-          <h2 className="text-yellow-500 font-black text-2xl mb-4 tracking-tighter">TACTICAL COMMAND CENTER</h2>
-          <button onClick={async () => {
-            if (DeviceMotionEvent?.requestPermission) await DeviceMotionEvent.requestPermission();
-            window.addEventListener('devicemotion', handleMotion);
-            setShowOverlay(false);
-          }} className="px-10 py-4 bg-yellow-500 text-black font-black rounded-xl">INIT SYSTEMS</button>
+          <button onClick={() => setShowOverlay(false)} className="px-12 py-5 bg-cyan-500 text-black font-black rounded-2xl uppercase">Iniciar Consola v40</button>
         </div>
       )}
 
-      {/* HEADER CON DESPLEGABLE COMPLETO */}
-      <header className="h-20 flex items-center justify-between px-6 border-b border-yellow-500 bg-black z-[1001]">
-        <div className="flex flex-col w-3/4">
-          <span className="text-yellow-500 font-black text-xs tracking-widest uppercase">Select Mission Objective</span>
-          <select 
-            value={activeStage.id} 
-            onChange={(e) => {
-              const s = STAGES.find(x => x.id === parseInt(e.target.value));
-              setActiveStage(s);
-              setIsTracking(false);
-            }}
-          >
-            {STAGES.map(s => <option key={s.id} value={s.id}>{s.id}. {s.name}</option>)}
-          </select>
-        </div>
-        <button onClick={handleSOS} className="p-3 emergency-btn rounded-full"><AlertTriangle size={24} color="white"/></button>
-      </header>
-
-      {/* PANEL TÁCTICO INTEGRADO */}
-      <div className="tactical-stats">
-        <div className="mb-2">
-          <div className="text-[8px] text-white/40 font-bold tracking-widest uppercase">Total_Steps</div>
-          <div className="text-lg font-black text-yellow-500">{steps.toLocaleString()}</div>
-        </div>
-        <div className="mb-2">
-          <div className="text-[8px] text-white/40 font-bold tracking-widest uppercase">Stage_Steps</div>
-          <div className="text-lg font-black text-cyan-400">{(steps - stageStartSteps).toLocaleString()}</div>
-        </div>
-        <div className="grid grid-cols-2 gap-2 border-y border-white/10 py-2 my-2">
-          <div><div className="text-[7px] text-white/40">GAIN</div><div className="text-[10px] font-bold text-white uppercase">{activeStage.gain}</div></div>
-          <div><div className="text-[7px] text-white/40">DIFF</div><div className="text-[10px] font-bold text-red-500 uppercase">{activeStage.diff}</div></div>
-        </div>
-        <div>
-          <div className="text-[8px] text-white/40 font-bold">RANGE_TO_TARGET</div>
-          <div className="text-xs font-bold text-white font-mono">{distanceToTarget ? distanceToTarget.toFixed(2) : "0.00"} KM</div>
-        </div>
+      {/* HEADER: SELECTOR */}
+      <div className="fixed top-5 right-5 z-[1000] w-2/3 max-w-[250px]">
+        <select value={activeStage.id} onChange={(e) => setActiveStage(STAGES.find(x => x.id === parseInt(e.target.value)))}>
+          {STAGES.map(s => <option key={s.id} value={s.id}>{s.id}. {s.name}</option>)}
+        </select>
       </div>
 
-      {/* MAPA CON LÍNEA AZUL Y MIRA TELESCÓPICA */}
+      {/* TELEMETRÍA */}
+      <div className="tactical-stats">
+        <div className="text-[8px] text-cyan-400 font-bold uppercase mb-1">Status_Online</div>
+        <div className="text-lg font-black text-yellow-500 leading-none">{steps.toLocaleString()} <span className="text-[7px] text-white/30">PASOS</span></div>
+        <div className="text-sm font-bold text-white mt-1">{distanceToTarget ? distanceToTarget.toFixed(2) : "0.0"} KM</div>
+      </div>
+
       <MapContainer center={activeStage.coords} zoom={14} zoomControl={false} style={{ flex: 1 }}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
-        <Polyline positions={STAGES.map(s => s.coords)} pathOptions={{ color: '#00e5ff', weight: 4, opacity: 0.8 }}/>
-        {userPos && (
-          <Marker position={userPos} icon={new L.DivIcon({
-            html: `<div class="sniper-scope-marker"><div class="scope-cross-h"></div><div class="scope-cross-v"></div><div class="scope-circle"></div><div class="scope-pulse"></div></div>`,
-            iconSize:[80,80], iconAnchor:[40,40]
-          })}/>
-        )}
+        <Polyline positions={STAGES.map(s => s.coords)} pathOptions={{ color: '#00e5ff', weight: 4 }}/>
+        {userPos && <Marker position={userPos} icon={new L.DivIcon({ html: `<div class="sniper-scope-marker"><div class="scope-cross-h"></div><div class="scope-cross-v"></div><div class="scope-circle"></div><div class="scope-pulse"></div></div>`, iconSize:[80,80], iconAnchor:[40,40] })}/>}
         <MapController userPos={userPos} tracking={isTracking} target={activeStage.coords}/>
       </MapContainer>
 
-      {/* BOTONERA FLOTANTE DE CONTROL */}
-      <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-[1000]">
-        <button onClick={() => {
-            const msg = `📍 MI UBICACIÓN:\nEtapa: ${activeStage.name}\nPasos: ${steps}\nLink: http://maps.google.com/?q=${userPos?.[0]},${userPos?.[1]}`;
-            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`);
-        }} className="p-4 bg-green-500 text-black rounded-xl shadow-lg active:scale-95 transition-transform"><MessageCircle size={28}/></button>
+      {/* CONSOLA DE MANDOS INFERIOR */}
+      <div className="bottom-console">
         
-        <button onClick={()=>setBatterySave(!batterySave)} className={`p-4 bg-black border rounded-xl ${batterySave ? 'text-cyan-400 border-cyan-400' : 'text-white border-white/20'}`}>
-          {batterySave ? <EyeOff size={28}/> : <Eye size={28}/>}
+        {/* BOTÓN SOS Y DESPLEGABLE */}
+        <div className="relative">
+          {sosMenu && (
+            <div className="emergency-popover">
+              <button onClick={() => window.open('tel:112')} className="btn-emergency shadow-red-600/50">
+                <Phone size={20}/> 112 EMERGENCIAS
+              </button>
+              <button onClick={() => window.open('tel:062')} className="btn-emergency" style={{background: '#003366'}}>
+                <ShieldAlert size={20}/> 062 GUARDIA CIVIL
+              </button>
+              <button onClick={() => window.open(`https://wa.me/?text=🚨 SOS! UBICACIÓN TÁCTICA: http://maps.google.com/maps?q=$0${userPos?.[0]},${userPos?.[1]}`)} className="btn-whatsapp">
+                <MessageCircle size={20}/> WHATSAPP SOS
+              </button>
+            </div>
+          )}
+          <button onClick={() => setSosMenu(!sosMenu)} className="p-5 bg-red-600 rounded-2xl border-2 border-white animate-pulse">
+            <AlertTriangle size={30} color="white"/>
+          </button>
+        </div>
+
+        {/* BOTÓN WHATSAPP REPORTE (VERDE) */}
+        <button onClick={() => window.open(`https://wa.me/?text=REPORTE: Etapa ${activeStage.id} - ${steps} pasos. Localización: http://maps.google.com/maps?q=$0${userPos?.[0]},${userPos?.[1]}`)} 
+          className="p-5 bg-green-500 text-black rounded-2xl border-2 border-black">
+          <span className="font-black text-xs">WHATSAPP</span>
         </button>
-        
-        <button onClick={()=>setIsTracking(!isTracking)} className={`p-4 rounded-xl shadow-xl transition-all ${isTracking ? 'bg-yellow-500 text-black scale-110' : 'bg-black text-white border border-white/20'}`}>
-          <Crosshair size={28}/>
+
+        {/* MIRA TELESCOPICA (AMARILLO TÁCTICO) */}
+        <button onClick={() => setIsTracking(!isTracking)} 
+          className={`p-5 rounded-2xl transition-all ${isTracking ? 'bg-yellow-500 text-black scale-110 shadow-lg shadow-yellow-500/50' : 'bg-gray-900 text-yellow-500 border border-yellow-500/50'}`}>
+          <Crosshair size={30}/>
         </button>
-        
-        <button onClick={resetSteps} className="p-4 bg-red-600 text-white rounded-xl shadow-lg active:bg-red-700"><RotateCcw size={28}/></button>
+
+        {/* MODO MAPA (CYAN) */}
+        <button onClick={() => setBatterySave(!batterySave)} 
+          className={`p-5 rounded-2xl border-2 ${batterySave ? 'bg-cyan-500 text-black border-white' : 'bg-black text-cyan-400 border-cyan-400/50'}`}>
+          {batterySave ? <EyeOff size={30}/> : <Eye size={30}/>}
+        </button>
+
+        {/* RESET (NARANJA/ROJO) */}
+        <button onClick={() => { if(confirm("¿RESET STEPS?")) setSteps(0); }} className="p-5 bg-orange-600 text-white rounded-2xl">
+          <RotateCcw size={30}/>
+        </button>
+
       </div>
     </div>
   );
