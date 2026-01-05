@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import {
   MessageCircle, Crosshair, RotateCcw, ShieldCheck, 
   Eye, EyeOff, AlertTriangle, Phone, ShieldAlert,
-  Zap, Navigation
+  Zap
 } from 'lucide-react';
 
 /* ===================== CONFIG & STYLES ===================== */
@@ -14,7 +14,7 @@ const STEP_DEBOUNCE_MS = 350;
 
 const STYLES = `
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
-:root { --yellow:#facc15; --red:#ff0000; --black:#050505; --cyan:#00e5ff; --green:#22c55e; --blue:#2563eb; }
+:root { --yellow:#facc15; --red:#ff0000; --black:#050505; --cyan:#00e5ff; --green:#22c55e; }
 html,body,#root{margin:0;height:100%;background:var(--black);font-family:'JetBrains Mono',monospace;color:white;overflow:hidden}
 .leaflet-container{background:#000;filter:invert(100%) hue-rotate(180deg) brightness(95%) contrast(120%); z-index:1}
 
@@ -26,15 +26,16 @@ html,body,#root{margin:0;height:100%;background:var(--black);font-family:'JetBra
 .scope-pulse{position:absolute;width:40px;height:40px;border:2px solid red;border-radius:50%;animation:pulse 2s infinite}
 @keyframes pulse{to{transform:scale(3);opacity:0}}
 
-.tactical-stats{position:fixed; top:20px; left:20px; z-index:1000; background:rgba(0,0,0,0.9); border:1px solid var(--cyan); padding:10px; border-radius:8px; min-width:160px; pointer-events:none; backdrop-filter:blur(5px)}
-select { background: #111; color: var(--yellow); border: 1px solid var(--yellow); padding: 8px; font-family: 'JetBrains Mono'; border-radius: 4px; width: 100%; font-size: 11px; }
+/* PANEL STATS AHORA A LA DERECHA */
+.tactical-stats{position:fixed; top:20px; right:20px; z-index:1000; background:rgba(0,0,0,0.9); border:1px solid var(--cyan); padding:10px; border-radius:8px; min-width:140px; pointer-events:none; backdrop-filter:blur(5px); text-align:right;}
 
-/* CONSOLA INFERIOR */
-.bottom-console { position: fixed; bottom: 0; left: 0; right: 0; background: #0a0a0a; border-top: 2px solid var(--cyan); display: flex; justify-content: space-around; align-items: center; padding: 12px 10px 20px 10px; z-index: 2000; }
+/* SELECTOR AHORA A LA IZQUIERDA */
+.selector-container{position:fixed; top:20px; left:20px; z-index:1100; width:180px;}
+select { background: #111; color: var(--yellow); border: 1px solid var(--yellow); padding: 10px; font-family: 'JetBrains Mono'; border-radius: 6px; width: 100%; font-size: 11px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
 
-/* MENÚ SOS DESPLEGABLE */
-.emergency-popover { position: absolute; bottom: 85px; left: 10px; display: flex; flex-direction: column; gap: 8px; width: 240px; animation: slideUp 0.2s ease-out; }
-.btn-emergency { background: var(--red); color: white; padding: 15px; border-radius: 12px; display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 12px; border: 2px solid white; box-shadow: 0 4px 15px rgba(255,0,0,0.4); }
+.bottom-console { position: fixed; bottom: 0; left: 0; right: 0; background: #0a0a0a; border-top: 2px solid var(--cyan); display: flex; justify-content: space-around; align-items: center; padding: 12px 10px 25px 10px; z-index: 2000; }
+.emergency-popover { position: absolute; bottom: 95px; left: 10px; display: flex; flex-direction: column; gap: 8px; width: 240px; animation: slideUp 0.2s ease-out; }
+.btn-emergency { background: var(--red); color: white; padding: 15px; border-radius: 12px; display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 12px; border: 2px solid white; }
 .btn-whatsapp { background: var(--green); color: black; padding: 15px; border-radius: 12px; display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 12px; border: 2px solid black; }
 
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -87,18 +88,18 @@ function MapController({ userPos, tracking, target }) {
 }
 
 export default function App() {
-  const [activeStage, setActiveStage] = useState(() => JSON.parse(localStorage.getItem('stage_v40')) || STAGES[0]);
-  const [steps, setSteps] = useState(() => parseInt(localStorage.getItem('steps_v40')) || 0);
-  const [userPos, setUserPos] = useState(() => JSON.parse(localStorage.getItem('last_pos_v40')) || null);
+  const [activeStage, setActiveStage] = useState(() => JSON.parse(localStorage.getItem('stage_v41')) || STAGES[0]);
+  const [steps, setSteps] = useState(() => parseInt(localStorage.getItem('steps_v41')) || 0);
+  const [userPos, setUserPos] = useState(() => JSON.parse(localStorage.getItem('last_pos_v41')) || null);
   const [isTracking, setIsTracking] = useState(false);
   const [batterySave, setBatterySave] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
   const [sosMenu, setSosMenu] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('steps_v40', steps);
-    localStorage.setItem('stage_v40', JSON.stringify(activeStage));
-    if(userPos) localStorage.setItem('last_pos_v40', JSON.stringify(userPos));
+    localStorage.setItem('steps_v41', steps);
+    localStorage.setItem('stage_v41', JSON.stringify(activeStage));
+    if(userPos) localStorage.setItem('last_pos_v41', JSON.stringify(userPos));
   }, [steps, activeStage, userPos]);
 
   useEffect(() => {
@@ -126,21 +127,21 @@ export default function App() {
       {showOverlay && (
         <div className="sensor-overlay">
           <ShieldCheck size={80} className="text-yellow-500 mb-6 animate-pulse"/>
-          <button onClick={() => setShowOverlay(false)} className="px-12 py-5 bg-cyan-500 text-black font-black rounded-2xl uppercase">Iniciar Consola v40</button>
+          <button onClick={() => setShowOverlay(false)} className="px-12 py-5 bg-cyan-500 text-black font-black rounded-2xl uppercase">Entrar v41</button>
         </div>
       )}
 
-      {/* HEADER: SELECTOR */}
-      <div className="fixed top-5 right-5 z-[1000] w-2/3 max-w-[250px]">
+      {/* IZQUIERDA: SELECTOR DE ETAPAS (Z-INDEX ALTO) */}
+      <div className="selector-container">
         <select value={activeStage.id} onChange={(e) => setActiveStage(STAGES.find(x => x.id === parseInt(e.target.value)))}>
           {STAGES.map(s => <option key={s.id} value={s.id}>{s.id}. {s.name}</option>)}
         </select>
       </div>
 
-      {/* TELEMETRÍA */}
+      {/* DERECHA: TELEMETRÍA (PASOS Y KM) */}
       <div className="tactical-stats">
-        <div className="text-[8px] text-cyan-400 font-bold uppercase mb-1">Status_Online</div>
-        <div className="text-lg font-black text-yellow-500 leading-none">{steps.toLocaleString()} <span className="text-[7px] text-white/30">PASOS</span></div>
+        <div className="text-[8px] text-cyan-400 font-bold uppercase mb-1">Live_Telemetry</div>
+        <div className="text-xl font-black text-yellow-500 leading-none">{steps.toLocaleString()} <span className="text-[7px] text-white/30">PASOS</span></div>
         <div className="text-sm font-bold text-white mt-1">{distanceToTarget ? distanceToTarget.toFixed(2) : "0.0"} KM</div>
       </div>
 
@@ -154,47 +155,48 @@ export default function App() {
       {/* CONSOLA DE MANDOS INFERIOR */}
       <div className="bottom-console">
         
-        {/* BOTÓN SOS Y DESPLEGABLE */}
+        {/* BOTÓN SOS DINÁMICO */}
         <div className="relative">
           {sosMenu && (
             <div className="emergency-popover">
-              <button onClick={() => window.open('tel:112')} className="btn-emergency shadow-red-600/50">
+              <button onClick={() => window.open('tel:112')} className="btn-emergency">
                 <Phone size={20}/> 112 EMERGENCIAS
               </button>
               <button onClick={() => window.open('tel:062')} className="btn-emergency" style={{background: '#003366'}}>
                 <ShieldAlert size={20}/> 062 GUARDIA CIVIL
               </button>
-              <button onClick={() => window.open(`https://wa.me/?text=🚨 SOS! UBICACIÓN TÁCTICA: http://maps.google.com/maps?q=$0${userPos?.[0]},${userPos?.[1]}`)} className="btn-whatsapp">
+              <button onClick={() => window.open(`https://wa.me/?text=🚨 SOS! UBICACIÓN: http://googleusercontent.com/maps.google.com/6${userPos?.[0]},${userPos?.[1]}`)} className="btn-whatsapp">
                 <MessageCircle size={20}/> WHATSAPP SOS
               </button>
             </div>
           )}
-          <button onClick={() => setSosMenu(!sosMenu)} className="p-5 bg-red-600 rounded-2xl border-2 border-white animate-pulse">
-            <AlertTriangle size={30} color="white"/>
+          <button onClick={() => setSosMenu(!sosMenu)} className="p-4 bg-red-600 rounded-2xl border-2 border-white flex flex-col items-center justify-center min-w-[80px] animate-pulse">
+            <AlertTriangle size={24} color="white"/>
+            <span className="text-[10px] font-black text-white mt-1">SOS</span>
           </button>
         </div>
 
-        {/* BOTÓN WHATSAPP REPORTE (VERDE) */}
-        <button onClick={() => window.open(`https://wa.me/?text=REPORTE: Etapa ${activeStage.id} - ${steps} pasos. Localización: http://maps.google.com/maps?q=$0${userPos?.[0]},${userPos?.[1]}`)} 
-          className="p-5 bg-green-500 text-black rounded-2xl border-2 border-black">
-          <span className="font-black text-xs">WHATSAPP</span>
+        {/* BOTÓN WHATSAPP (VERDE) */}
+        <button onClick={() => window.open(`https://wa.me/?text=REPORTE: Etapa ${activeStage.id} - ${steps} pasos. Localización: http://googleusercontent.com/maps.google.com/6${userPos?.[0]},${userPos?.[1]}`)} 
+          className="p-5 bg-green-500 text-black rounded-2xl border-2 border-black flex items-center justify-center">
+          <span className="font-black text-[10px]">WHATSAPP</span>
         </button>
 
-        {/* MIRA TELESCOPICA (AMARILLO TÁCTICO) */}
+        {/* MIRA (AMARILLO) */}
         <button onClick={() => setIsTracking(!isTracking)} 
-          className={`p-5 rounded-2xl transition-all ${isTracking ? 'bg-yellow-500 text-black scale-110 shadow-lg shadow-yellow-500/50' : 'bg-gray-900 text-yellow-500 border border-yellow-500/50'}`}>
-          <Crosshair size={30}/>
+          className={`p-5 rounded-2xl transition-all ${isTracking ? 'bg-yellow-500 text-black scale-110 shadow-lg' : 'bg-gray-900 text-yellow-500 border border-yellow-500/50'}`}>
+          <Crosshair size={28}/>
         </button>
 
-        {/* MODO MAPA (CYAN) */}
+        {/* MAPA/BATERIA (CYAN) */}
         <button onClick={() => setBatterySave(!batterySave)} 
-          className={`p-5 rounded-2xl border-2 ${batterySave ? 'bg-cyan-500 text-black border-white' : 'bg-black text-cyan-400 border-cyan-400/50'}`}>
-          {batterySave ? <EyeOff size={30}/> : <Eye size={30}/>}
+          className={`p-5 rounded-2xl border-2 ${batterySave ? 'bg-cyan-500 text-black' : 'bg-black text-cyan-400 border-cyan-400/50'}`}>
+          {batterySave ? <EyeOff size={28}/> : <Eye size={28}/>}
         </button>
 
-        {/* RESET (NARANJA/ROJO) */}
-        <button onClick={() => { if(confirm("¿RESET STEPS?")) setSteps(0); }} className="p-5 bg-orange-600 text-white rounded-2xl">
-          <RotateCcw size={30}/>
+        {/* REINICIAR (ROJO) */}
+        <button onClick={() => { if(confirm("¿RESET?")) setSteps(0); }} className="p-5 bg-orange-600 text-white rounded-2xl">
+          <RotateCcw size={28}/>
         </button>
 
       </div>
