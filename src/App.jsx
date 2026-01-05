@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { 
   Zap, Footprints, ShieldAlert, Activity, 
   MessageCircle, TrendingUp, ChevronUp, ChevronDown, Crosshair,
-  Lightbulb, PhoneCall, Navigation, Clock, Map as MapIcon
+  Lightbulb, PhoneCall, Navigation, Clock, Map as MapIcon, Play
 } from 'lucide-react';
 
 const STYLES = `
@@ -26,14 +26,14 @@ const STYLES = `
   @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
   .floating-controls { position: absolute; bottom: 20px; right: 20px; z-index: 5000; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
   .btn-tactical { width: 55px; height: 55px; border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(0,0,0,0.8); cursor: pointer; border: none; transition: transform 0.2s; }
-  .btn-tactical:active { transform: scale(0.9); }
-  
-  /* CAMBIO: BOTÓN SOS REDONDO ROJO SEGÚN TU FOTO */
   .btn-sos-red-circle { width: 65px; height: 65px; border-radius: 50%; background: var(--red); color: white; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; border: 4px solid rgba(255,255,255,0.2); box-shadow: 0 0 25px var(--red); cursor: pointer; }
-  
   .btn-emergency-pill { background: #22c55e; color: white; padding: 12px 20px; border-radius: 40px; font-size: 11px; font-weight: 900; display: flex; align-items: center; gap: 8px; box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); border: none; cursor: pointer; text-align: left; }
   .btn-gps-wa { background: #25D366; color: black; padding: 10px 15px; border-radius: 30px; font-size: 10px; font-weight: 900; display: flex; align-items: center; gap: 8px; box-shadow: 0 0 15px rgba(37, 211, 102, 0.4); border: none; cursor: pointer; }
   .distance-tag { background: rgba(37, 99, 235, 0.2); border: 1px solid #2563eb; color: #60a5fa; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; margin-top: 5px; display: inline-flex; align-items: center; gap: 5px; }
+  
+  /* OVERLAY PARA ACTIVAR SENSORES */
+  .sensor-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; text-align: center; }
+  .btn-sensor-start { background: var(--yellow); color: black; padding: 20px 40px; border-radius: 12px; font-weight: 900; border: none; font-size: 16px; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 0 30px rgba(250, 204, 21, 0.4); }
 `;
 
 const STAGES = [
@@ -86,7 +86,9 @@ export default function App() {
   const [userPos, setUserPos] = useState(null);
   const [isTracking, setIsTracking] = useState(false);
   const [steps, setSteps] = useState(0);
+  const [showOverlay, setShowOverlay] = useState(true);
   const lastAcc = useRef({ x: 0, y: 0, z: 0 });
+  const stepDebounce = useRef(false);
 
   useEffect(() => {
     const styleTag = document.createElement('style');
@@ -97,20 +99,35 @@ export default function App() {
       setUserPos([p.coords.latitude, p.coords.longitude]);
     }, null, { enableHighAccuracy: true });
 
-    const handleMotion = (e) => {
-      const acc = e.accelerationIncludingGravity;
-      if (!acc) return;
-      const delta = Math.abs(acc.x + acc.y + acc.z - lastAcc.current.x - lastAcc.current.y - lastAcc.current.z);
-      if (delta > 14) setSteps(s => s + 1);
-      lastAcc.current = { x: acc.x, y: acc.y, z: acc.z };
-    };
-    
-    window.addEventListener('devicemotion', handleMotion);
-    return () => {
-      navigator.geolocation.clearWatch(watchId);
-      window.removeEventListener('devicemotion', handleMotion);
-    };
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
+
+  const handleMotion = (e) => {
+    const acc = e.accelerationIncludingGravity;
+    if (!acc) return;
+    const force = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
+    const prevForce = Math.sqrt(lastAcc.current.x**2 + lastAcc.current.y**2 + lastAcc.current.z**2);
+    const delta = Math.abs(force - prevForce);
+
+    if (delta > 12.5 && !stepDebounce.current) {
+      setSteps(s => s + 1);
+      stepDebounce.current = true;
+      setTimeout(() => { stepDebounce.current = false; }, 350);
+    }
+    lastAcc.current = { x: acc.x, y: acc.y, z: acc.z };
+  };
+
+  const startSensors = async () => {
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+      const permission = await DeviceMotionEvent.requestPermission();
+      if (permission === 'granted') {
+        window.addEventListener('devicemotion', handleMotion);
+      }
+    } else {
+      window.addEventListener('devicemotion', handleMotion);
+    }
+    setShowOverlay(false);
+  };
 
   const calculateDistance = () => {
     if (!userPos) return "--";
@@ -119,24 +136,28 @@ export default function App() {
     const dLat = rad(activeStage.coords[0] - userPos[0]);
     const dLong = rad(activeStage.coords[1] - userPos[1]);
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(rad(userPos[0])) * Math.cos(rad(activeStage.coords[0])) * Math.sin(dLong/2) * Math.sin(dLong/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return (R * c).toFixed(1);
-  };
-
-  const sendEmergencyWhatsApp = () => {
-    if (!userPos) return alert("Buscando señal GPS...");
-    const msg = `EMERGENCIA: GPS http://googleusercontent.com/maps.google.com/3{userPos[0]},${userPos[1]}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    return (R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)))).toFixed(1);
   };
 
   return (
     <div className="flex flex-col h-screen w-screen bg-black overflow-hidden">
+      {showOverlay && (
+        <div className="sensor-overlay">
+          <Zap className="text-yellow-500 mb-6" size={60} fill="currentColor" />
+          <h2 className="text-yellow-500 font-black text-xl mb-2 uppercase">Santiago Tactical</h2>
+          <p className="text-white/50 text-xs mb-8 uppercase tracking-widest">Activar sensores de movimiento para conteo de pasos y KM</p>
+          <button onClick={startSensors} className="btn-sensor-start">
+            <Play size={20} fill="black" /> INICIAR SISTEMA
+          </button>
+        </div>
+      )}
+
       <header className="h-16 bg-black border-b-2 border-yellow-500 flex items-center justify-between px-4 z-[3000]">
         <div className="flex items-center gap-2">
           <Zap className="text-yellow-500" size={24} fill="currentColor" />
           <div>
-            <h1 className="text-yellow-500 font-black text-xs m-0 uppercase italic">Santiago Tactical v15.2</h1>
-            <p className="text-[8px] text-white/40 m-0 font-bold uppercase tracking-widest">System Active</p>
+            <h1 className="text-yellow-500 font-black text-xs m-0 uppercase italic">Santiago Tactical v21.0</h1>
+            <p className="text-[8px] text-white/40 m-0 font-bold uppercase tracking-widest">Active System</p>
           </div>
         </div>
         <div className="flex items-center gap-3 bg-red-600/10 px-3 py-1 border border-red-600/30 rounded">
@@ -157,12 +178,12 @@ export default function App() {
             </div>
             <div className="flex flex-col items-end">
               <span className="text-[8px] text-white/40 font-black uppercase">KM</span>
-              <span className="text-xs font-black text-white">{(steps * 0.0007).toFixed(2)}</span>
+              <span className="text-xs font-black text-white">{(steps * 0.00075).toFixed(2)}</span>
             </div>
           </div>
 
           <div className="p-2 bg-yellow-500 text-black text-[9px] font-black uppercase text-center flex items-center justify-center gap-2">
-            <MapIcon size={12} /> 33 OBJETIVOS
+            <MapIcon size={12} /> 33 OBJETIVOS ACTIVOS
           </div>
 
           <div className="stage-list-container">
@@ -177,7 +198,7 @@ export default function App() {
                   <div className="mt-2 space-y-2">
                     <div className="distance-tag">
                       <Navigation size={12} className="animate-pulse" />
-                      REAL: {calculateDistance()} KM
+                      DIST: {calculateDistance()} KM
                     </div>
                     <p className="text-[9px] text-white/70 leading-tight m-0 uppercase font-bold">{s.tips}</p>
                   </div>
@@ -189,19 +210,18 @@ export default function App() {
 
         <main className="flex-1 relative bg-black">
           <div className="floating-controls">
-            <button onClick={sendEmergencyWhatsApp} className="btn-gps-wa">
+            <button onClick={() => {
+              const msg = `SOS GPS: http://maps.google.com/maps?q=${userPos[0]},${userPos[1]}`;
+              window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+            }} className="btn-gps-wa">
               <MessageCircle size={16} fill="black" /> ENVIAR GPS
             </button>
             
-            {/* CAMBIO: BOTÓN SOS ROJO CIRCULAR SEGÚN TU FOTO */}
-            <div className="btn-sos-red-circle" onClick={() => window.location.href="tel:112"}>
-              SOS
-            </div>
+            <div className="btn-sos-red-circle" onClick={() => window.location.href="tel:112"}>SOS</div>
 
-            {/* CAMBIO: BOTÓN EMERGENCIA VERDE ALARGADO SEGÚN TU FOTO */}
             <button onClick={() => window.location.href="tel:112"} className="btn-emergency-pill">
               <PhoneCall size={18} fill="white" />
-              <div>112 Emergencias<br/><span style={{fontSize:'8px', opacity:0.7}}>062 Guardia Civil</span></div>
+              <div>112 EMERGENCIA<br/><span style={{fontSize:'8px', opacity:0.7}}>062 GUARDIA CIVIL</span></div>
             </button>
 
             <button onClick={() => setIsTracking(!isTracking)} className="btn-tactical bg-yellow-500">
@@ -211,10 +231,7 @@ export default function App() {
 
           <MapContainer center={activeStage.coords} zoom={13} zoomControl={false} style={{height: "100%", width: "100%"}}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            
-            {/* CAMBIO: LÍNEA AZUL (CYAN) DE LAS ETAPAS */}
             <Polyline positions={STAGES.map(s => s.coords)} color="#00e5ff" weight={4} opacity={0.8} />
-            
             {userPos && (
               <Marker position={userPos} icon={new L.DivIcon({
                 html: `<div class="sniper-scope-marker"><div class="scope-cross-h"></div><div class="scope-cross-v"></div><div class="scope-circle"></div><div class="scope-pulse"></div></div>`,
